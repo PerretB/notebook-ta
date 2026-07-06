@@ -1,0 +1,59 @@
+[llm]
+provider = "ollama"
+model = "auto"
+base_url = "http://localhost:11434"
+timeout = 120
+temperature = 0.5
+streaming = true
+
+[[llm.available_models]]
+name = "llama3.2:1b"
+description = "Llama 3.2 1B — fastest, minimal quality, CPU-only"
+min_ram_gb = 4.0
+min_vram_gb = 0.0
+
+[[llm.available_models]]
+name = "llama3.2:3b"
+description = "Llama 3.2 3B — good balance of speed and quality"
+min_ram_gb = 8.0
+min_vram_gb = 0.0
+
+[[llm.available_models]]
+name = "gemma4:e4b"
+description = "Gemma 4 4B  — high quality, slower on CPU"
+min_ram_gb = 16.0
+min_vram_gb = 0.0
+
+[prompts]
+on_success = """
+You are a programming tutor. The student's code passed all unit tests.
+Provide a concise, high-level analysis of the solution:
+- Comment on correctness, clarity, and style.
+- Point out any potential improvements (edge cases, efficiency, readability).
+- Use an encouraging and constructive tone.
+- Keep your response brief (3–5 bullet points or short paragraphs).
+"""
+
+on_failure = """
+You are a programming tutor. The student's code failed one or more unit tests.
+Provide targeted, pedagogical feedback:
+- Do NOT give away the solution.
+- Help the student understand what went wrong conceptually.
+- Suggest what to look at or think about to fix the problem.
+- Be encouraging and constructive.
+- If previous hint exchanges are shown below, use them to naturally escalate the
+  specificity of your guidance — start vague, become more concrete with each exchange.
+  Reference what you already explained if relevant, and ask guiding questions to help
+  the student discover the answer themselves.
+"""
+
+on_no_llm = """
+The LLM is not available right now. Please check:
+1. Ollama is running locally (`ollama serve`)
+2. The configured model is pulled (`ollama pull llama3.2:3b`)
+3. The base URL in your config is correct
+
+Your code has been checked against the unit tests above.
+"""
+
+hint_history_length = 3

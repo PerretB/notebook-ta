@@ -1,0 +1,118 @@
+# Exercise definitions for the example notebook
+
+# ------------------------------------------------------------------
+# Exercise 1: Add two numbers
+# ------------------------------------------------------------------
+[exercises.ex1]
+statement = """
+Write a function `add(a, b)` that returns the sum of two numbers.
+
+Example:
+```python
+add(2, 3)  # → 5
+```
+"""
+expected_output = "5"
+name = "Addition"
+
+[[exercises.ex1.tests]]
+name = "add(2, 3) == 5"
+code = """
+def test_add_basic(add):
+    result = add(2, 3)
+    return result == 5, f"Expected 5, got {result}"
+"""
+
+[[exercises.ex1.tests]]
+name = "add(-1, 1) == 0"
+code = """
+def test_add_negative(add):
+    result = add(-1, 1)
+    return result == 0, f"Expected 0, got {result}"
+"""
+
+[[exercises.ex1.tests]]
+name = "add(0, 0) == 0"
+code = """
+def test_add_zero(add):
+    result = add(0, 0)
+    return result == 0, f"Expected 0, got {result}"
+"""
+
+
+# ------------------------------------------------------------------
+# Exercise 2: Reverse a list
+# ------------------------------------------------------------------
+[exercises.ex2]
+statement = """
+Write a function `reverse_list(lst)` that returns a new list with the
+elements of `lst` in reverse order. Do not modify the original list.
+
+Example:
+```python
+reverse_list([1, 2, 3])  # → [3, 2, 1]
+```
+"""
+expected_output = "[3, 2, 1]"
+additional_info = "Do not use the built-in `list.reverse()` method or slice notation `[::-1]`."
+name = "Reverse List"
+
+[[exercises.ex2.tests]]
+name = "reverse_list([1, 2, 3]) == [3, 2, 1]"
+code = """
+def test_reverse_basic(reverse_list):
+    result = reverse_list([1, 2, 3])
+    return result == [3, 2, 1], f"Expected [3, 2, 1], got {result}"
+"""
+
+[[exercises.ex2.tests]]
+name = "Original list not modified"
+code = """
+def test_no_mutation(reverse_list):
+    original = [1, 2, 3]
+    original_copy = list(original)
+    reverse_list(original)
+    return original == original_copy, "The original list was modified!"
+"""
+
+[[exercises.ex2.tests]]
+name = "reverse_list([]) == []"
+code = """
+def test_empty(reverse_list):
+    result = reverse_list([])
+    return result == [], f"Expected [], got {result}"
+"""
+
+
+# ------------------------------------------------------------------
+# Exercise 3: Multiply two numbers (with external module tests)
+# ------------------------------------------------------------------
+[exercises.ex3]
+statement = """
+Write a function `multiply(a, b)` that returns the product of two numbers.
+
+Example:
+```python
+multiply(3, 4)  # → 12
+```
+
+*Note: This exercise uses external module-based tests to demonstrate
+an alternative testing approach.*
+"""
+expected_output = "12"
+name = "Multiply"
+
+[[exercises.ex3.tests]]
+name = "multiply(3, 4) == 12"
+module = "test_helpers"
+function = "test_multiply_basic"
+
+[[exercises.ex3.tests]]
+name = "multiply(5, 0) == 0"
+module = "test_helpers"
+function = "test_multiply_zero"
+
+[[exercises.ex3.tests]]
+name = "multiply(-2, 3) == -6"
+module = "test_helpers"
+function = "test_multiply_negative"
