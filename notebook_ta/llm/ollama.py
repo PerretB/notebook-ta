@@ -92,7 +92,7 @@ class OllamaProvider(LLMProvider):
             if not self._is_localhost():
                 _log.warning("Ollama server not reachable at %r", self._base_url)
                 return False
-            print("[notebook-ta] Ollama server not running — starting…")
+            print("[notebook-ta] Ollama server not running — starting and loading model, please wait…")
             if not self._try_start_server():
                 _log.warning("Failed to start Ollama server at %r", self._base_url)
                 return False

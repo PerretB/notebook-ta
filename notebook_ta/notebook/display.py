@@ -8,6 +8,14 @@ from collections.abc import Callable
 
 from IPython import display as ipydisplay
 
+_LLM_ANSWER_STYLE = (
+    "background: rgba(20, 184, 166, 0.14); "
+    "border-left: 4px solid #14b8a6; "
+    "border-radius: 6px; "
+    "padding: 0.85em 1em; "
+    "margin: 0.75em 0; "
+    "color: inherit"
+)
 _ANSI_SGR_RE = re.compile(r"\x1b\[([0-9;]*)m")
 _ANSI_COLORS = {
     30: "#000000",
@@ -27,6 +35,11 @@ _ANSI_COLORS = {
     96: "#00b8b8",
     97: "#ffffff",
 }
+
+
+def format_llm_answer_markdown(answer: str) -> str:
+    """Wrap an LLM answer in a visually distinct Markdown block."""
+    return f'<div style="{_LLM_ANSWER_STYLE}">\n\n🤖 {answer}\n\n</div>'
 
 
 def _ansi_to_html(value: str) -> str:

@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 from typing import AsyncIterator
 
 import pytest
+from IPython import display as ipydisplay
 
 from notebook_ta.config.models import ExerciseConfig, GlobalConfig, LLMConfig, PromptConfig
 from notebook_ta.exercise.definition import Exercise
@@ -138,6 +139,13 @@ class TestStreamingIntegration:
 
         # Verify update() was called 3 times (once per chunk)
         assert mock_handle.update.call_count == 3
+        first_display = mock_ipydisplay.call_args.args[0]
+        assert isinstance(first_display, ipydisplay.Markdown)
+        assert "background: rgba(20, 184, 166, 0.14)" in first_display.data
+
+        final_update = mock_handle.update.call_args.args[0]
+        assert isinstance(final_update, ipydisplay.Markdown)
+        assert "🤖 Hello world!" in final_update.data
 
         # Verify no duplicate displays
         assert mock_ipydisplay.call_count == 1

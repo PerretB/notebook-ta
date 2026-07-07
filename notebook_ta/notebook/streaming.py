@@ -6,6 +6,8 @@ from typing import AsyncIterator
 
 from IPython import display as ipydisplay
 
+from notebook_ta.notebook.display import format_llm_answer_markdown
+
 
 async def stream_to_output(async_gen: AsyncIterator[str]) -> str:
     """Stream LLM chunks into a Markdown display updated in place.
@@ -23,12 +25,15 @@ async def stream_to_output(async_gen: AsyncIterator[str]) -> str:
         The full concatenated response string.
     """
     accumulated: list[str] = []
-    handle = ipydisplay.display(ipydisplay.Markdown(""), display_id=True)
+    handle = ipydisplay.display(
+        ipydisplay.Markdown(format_llm_answer_markdown("")),
+        display_id=True,
+    )
 
     async for chunk in async_gen:
         accumulated.append(chunk)
         full_text = "".join(accumulated)
         if handle is not None:
-            handle.update(ipydisplay.Markdown(full_text))
+            handle.update(ipydisplay.Markdown(format_llm_answer_markdown(full_text)))
 
     return "".join(accumulated)
