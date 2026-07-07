@@ -34,8 +34,6 @@ def add_exercise(path: str | Path, exercise: ExerciseConfig) -> None:
         item.add("name", exercise.name)
     if exercise.statement:
         item.add("statement", exercise.statement)
-    if exercise.expected_output:
-        item.add("expected_output", exercise.expected_output)
     if exercise.additional_info:
         item.add("additional_info", exercise.additional_info)
     exercises.add(exercise.id, item)

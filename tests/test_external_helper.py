@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+__test__ = False
+
 
 def test_add_via_external_module(add) -> bool:
     """Test function loaded from external module for testing the runner."""

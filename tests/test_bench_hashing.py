@@ -32,11 +32,6 @@ class TestHashStability:
         changed = compute_exercise_hash(make_exercise(statement="A different statement."))
         assert original != changed
 
-    def test_expected_output_change_changes_hash(self) -> None:
-        original = compute_exercise_hash(make_exercise())
-        changed = compute_exercise_hash(make_exercise(expected_output="42"))
-        assert original != changed
-
     def test_additional_info_change_changes_hash(self) -> None:
         original = compute_exercise_hash(make_exercise())
         changed = compute_exercise_hash(make_exercise(additional_info="Use recursion."))
@@ -58,11 +53,10 @@ class TestHashStability:
 
 class TestInputSnapshot:
     def test_snapshot_captures_verbatim_fields(self) -> None:
-        config = make_exercise(expected_output="5", additional_info="info")
+        config = make_exercise(additional_info="info")
         solution = make_solution()
         snapshot = build_input_snapshot(config, solution)
         assert snapshot.exercise_statement == config.statement
-        assert snapshot.expected_output == "5"
         assert snapshot.additional_info == "info"
         assert snapshot.student_code == solution.code
         assert snapshot.combined_hash

@@ -103,7 +103,6 @@ class InputSnapshot(BaseModel):
     """Verbatim snapshot of the inputs used for one execution, plus drift hashes."""
 
     exercise_statement: str
-    expected_output: str | None = None
     additional_info: str | None = None
     tests_serialized: str
     student_code: str

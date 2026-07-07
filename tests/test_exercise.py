@@ -111,12 +111,10 @@ class TestPromptSections:
 
     def test_optional_metadata_included_when_set(self) -> None:
         ex = make_exercise(
-            expected_output="5",
             additional_info="Use iteration.",
         )
         prompt = ex.build_prompt("code", [TestResult("t", True)])
         assert "Use iteration." in prompt
-        assert "5" in prompt
 
     def test_optional_metadata_absent_when_not_set(self) -> None:
         ex = make_exercise()

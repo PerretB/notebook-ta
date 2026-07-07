@@ -12,7 +12,6 @@ Each exercise is defined in `exercises.toml` under `[exercises.<id>]`:
 [exercises.ex1]
 name = "Add two numbers"
 statement = "Write a function `add(a, b)` that returns the sum of two numbers."
-expected_output = "5"
 additional_info = "No imports are needed."
 ```
 
@@ -147,7 +146,6 @@ statement = """
 Write a function `reverse_list(lst)` that returns a new list
 with the elements in reverse order.
 """
-expected_output = "[3, 2, 1]"
 additional_info = "Do not use lst[::-1] or lst.reverse()."
 
 [[exercises.reverse.tests]]

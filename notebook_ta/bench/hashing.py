@@ -1,8 +1,8 @@
 """Stale/drift detection hashing for the benchmarking tool.
 
 Per the architecture decision, the drift hash covers the exercise `statement`,
-`expected_output`, `additional_info`, the serialized unit test definitions, and the
-student solution code. A change to any of these marks a benchmark result as stale.
+`additional_info`, the serialized unit test definitions, and the student solution code.
+A change to any of these marks a benchmark result as stale.
 """
 
 from __future__ import annotations
@@ -29,7 +29,6 @@ def compute_exercise_hash(config: ExerciseConfig) -> str:
     """Hash the exercise fields that affect the prompt and unit tests."""
     payload = {
         "statement": config.statement,
-        "expected_output": config.expected_output,
         "additional_info": config.additional_info,
         "tests": _serialize_tests(config.tests),
     }
@@ -47,7 +46,6 @@ def build_input_snapshot(config: ExerciseConfig, solution: StudentSolution) -> I
     student_hash = compute_student_hash(solution.code)
     return InputSnapshot(
         exercise_statement=config.statement or "",
-        expected_output=config.expected_output,
         additional_info=config.additional_info,
         tests_serialized=_serialize_tests(config.tests),
         student_code=solution.code,

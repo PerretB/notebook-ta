@@ -60,11 +60,9 @@ class TestBuildAuthoringPrompt:
         exercise = ExerciseConfig(
             id="ex1",
             statement="Write add(a, b).",
-            expected_output="5",
             additional_info="Use type hints.",
         )
         prompt = build_authoring_prompt(exercise, [])
-        assert "5" in prompt
         assert "Use type hints." in prompt
 
 

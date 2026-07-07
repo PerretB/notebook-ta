@@ -53,7 +53,6 @@ GLOBAL_TOML_CONTENT = textwrap.dedent("""\
 EXERCISES_TOML_CONTENT = textwrap.dedent("""\
     [exercises.ex1]
     statement = "Write an add function."
-    expected_output = "5"
 
     [[exercises.ex1.tests]]
     name = "Test add(2,3)"
@@ -137,7 +136,6 @@ class TestLoadExercises:
         exercises = load_exercises(exercises_file)
         ex1 = next(e for e in exercises if e.id == "ex1")
         assert ex1.statement == "Write an add function."
-        assert ex1.expected_output == "5"
         assert len(ex1.tests) == 1
         assert ex1.tests[0].code is not None
         assert ex1.tests[0].module is None

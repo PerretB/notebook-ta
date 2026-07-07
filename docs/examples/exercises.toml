@@ -12,7 +12,6 @@ Example:
 add(2, 3)  # → 5
 ```
 """
-expected_output = "5"
 name = "Addition"
 
 [[exercises.ex1.tests]]
@@ -53,7 +52,6 @@ Example:
 reverse_list([1, 2, 3])  # → [3, 2, 1]
 ```
 """
-expected_output = "[3, 2, 1]"
 additional_info = "Do not use the built-in `list.reverse()` method or slice notation `[::-1]`."
 name = "Reverse List"
 
@@ -99,7 +97,6 @@ multiply(3, 4)  # → 12
 *Note: This exercise uses external module-based tests to demonstrate
 an alternative testing approach.*
 """
-expected_output = "12"
 name = "Multiply"
 
 [[exercises.ex3.tests]]

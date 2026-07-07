@@ -19,7 +19,6 @@ from notebook_ta.cli.scaffold import cli
 EXERCISES_TOML = textwrap.dedent("""\
     [exercises.ex1]
     statement = "Write an add function."
-    expected_output = "5"
 
     [[exercises.ex1.tests]]
     name = "Test add"

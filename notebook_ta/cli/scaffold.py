@@ -57,8 +57,6 @@ def create_notebook(exercises_toml: str, global_config: str | None, output: str)
     for ex in exercises:
         # Markdown cell with exercise statement
         md_source = f"## Exercise `{ex.id}`\n\n{ex.statement}"
-        if ex.expected_output:
-            md_source += f"\n\n**Expected output:**\n```\n{ex.expected_output}\n```"
         if ex.additional_info:
             md_source += f"\n\n{ex.additional_info}"
         cells.append(new_markdown_cell(source=md_source))

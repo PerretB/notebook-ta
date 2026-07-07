@@ -27,8 +27,6 @@ def build_authoring_prompt(exercise: ExerciseConfig, tags: list[str]) -> str:
     """Assemble the prompt asking the internal model to draft a student solution."""
     parts: list[str] = [_AUTHOR_PREAMBLE]
     parts.append(f"## Exercise\n\n{exercise.statement or ''}\n")
-    #if exercise.expected_output:
-    #    parts.append(f"\n**Expected Output:**\n{exercise.expected_output}\n")
     if exercise.additional_info:
         parts.append(f"\n**Additional Information:**\n{exercise.additional_info}\n")
 

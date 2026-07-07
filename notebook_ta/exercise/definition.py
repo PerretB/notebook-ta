@@ -90,9 +90,6 @@ class Exercise:
         parts.append("## Exercise\n\n")
         parts.append(f"{self.statement}\n")
 
-        if self._config.expected_output:
-            parts.append(f"\n**Expected Output:**\n{self._config.expected_output}\n")
-
         if self._config.additional_info:
             parts.append(f"\n**Additional Information:**\n{self._config.additional_info}\n")
 

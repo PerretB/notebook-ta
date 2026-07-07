@@ -63,7 +63,6 @@ Each exercise is declared under `[exercises.<id>]`.
 | Key | Type | Required | Description |
 |-----|------|----------|-------------|
 | `statement` | string | ❌ | Exercise description passed to the LLM. May be omitted if the statement is embedded in the notebook (see [Embedding statements in the notebook](authoring_exercises.md#embedding-statements-in-the-notebook)) |
-| `expected_output` | string | ❌ | Example expected output |
 | `additional_info` | string | ❌ | Any other context for the LLM |
 | `prompt_on_success` | string | ❌ | Overrides global `on_success` |
 | `prompt_on_failure` | string | ❌ | Overrides global `on_failure` |

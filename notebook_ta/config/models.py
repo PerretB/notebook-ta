@@ -69,7 +69,6 @@ class ExerciseConfig(BaseModel):
     id: str
     name: str | None = None
     statement: str | None = None
-    expected_output: str | None = None
     additional_info: str | None = None
     prompt_on_success: str | None = None
     prompt_on_failure: str | None = None
