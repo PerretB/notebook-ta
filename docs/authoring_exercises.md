@@ -47,7 +47,9 @@ It must return either:
 - A `bool` (`True` = pass, `False` = fail)
 - A `tuple[bool, str]` where the string is a human-readable message
 
-Any text printed to stdout is also captured and included in the message.
+Any text printed to stdout is also captured and included in the message. Common ANSI SGR color and
+text-style sequences (including standard and bright colors, bold, and underline) are rendered in
+the notebook output, so existing terminal-style custom test reports remain readable.
 
 ### Using `student_globals`
 
