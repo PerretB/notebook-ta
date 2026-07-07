@@ -6,13 +6,14 @@ from collections.abc import Callable
 
 from nicegui import events, ui
 
-from notebook_ta.bench.executor import extended_sys_path
+from notebook_ta.bench.executor import extended_sys_path, run_setup_code
 from notebook_ta.bench.internal_model import InternalModelService
 from notebook_ta.bench.models import DEFAULT_TAG_COLOR, StudentSolution
 from notebook_ta.bench.state import BenchAppState
 from notebook_ta.bench.ui.tag_badges import render_tag_badge
 from notebook_ta.config.models import ExerciseConfig, GlobalConfig, PromptConfig
 from notebook_ta.exercise.definition import Exercise
+from notebook_ta.notebook._ansi import ansi_to_html
 from notebook_ta.testing.runner import TestRunner
 
 
@@ -62,6 +63,7 @@ def build(
                         value=config.name or "",
                         on_change=_on_exercise_name_change,
                     ).props("debounce=500").classes("w-full max-w-xl")
+                    _build_setup_code_dialog(state, config, on_catalog_change)
                     with ui.card().classes("w-full bg-grey-1"):
                         ui.markdown(config.statement or "*(no statement)*")
                     _build_solutions(state, config, on_catalog_change)
@@ -191,7 +193,7 @@ def _build_solutions(
                             on_solution_change()
 
                     with ui.row():
-                        ui.button("Run tests", on_click=_run_tests)
+                        ui.button("Run tests", on_click=_drop_queued_duplicates(_run_tests))
                         ui.button("Remove", on_click=_run_once(_remove)).props(
                             "flat color=negative"
                         )
@@ -234,6 +236,37 @@ def _build_add_exercise_dialog(
     ui.button("Add exercise", icon="add", on_click=dialog.open)
 
 
+def _build_setup_code_dialog(
+    state: BenchAppState,
+    config: ExerciseConfig,
+    on_catalog_change: Callable[[], object] | None,
+) -> None:
+    """Build the dialog used to edit exercise setup code."""
+    with ui.dialog() as dialog, ui.card().classes("w-full max-w-3xl"):
+        ui.label(f"Setup code for {config.id}").classes("text-lg font-bold")
+        setup_editor = ui.codemirror(
+            value=state.project.setup_code_for(config.id), language="Python"
+        ).classes("w-full").style("min-height: 260px")
+
+        def _save() -> None:
+            try:
+                state.update_exercise_setup_code(config.id, setup_editor.value or "")
+            except Exception as exc:
+                ui.notify(f"Could not save setup code: {exc}", type="negative")
+                return
+            dialog.close()
+            if on_catalog_change:
+                on_catalog_change()
+            ui.notify("Setup code saved.", type="positive")
+
+        with ui.row():
+            ui.button("Save setup code", on_click=_save)
+            ui.button("Cancel", on_click=dialog.close).props("flat")
+
+    label = "Edit setup code" if state.project.setup_code_for(config.id) else "Add setup code"
+    ui.button(label, icon="code", on_click=dialog.open).props("outline")
+
+
 def _run_once(action: Callable[[], None]) -> Callable[[], None]:
     """Return a handler that ignores duplicate invocations after one successful call."""
     called = False
@@ -248,6 +281,29 @@ def _run_once(action: Callable[[], None]) -> Callable[[], None]:
         except Exception:
             called = False
             raise
+
+    return handler
+
+
+def _drop_queued_duplicates(action: Callable[[], None]) -> Callable[[], None]:
+    """Return a handler that ignores duplicate events queued by the same UI gesture."""
+    running_or_queued = False
+
+    def _reset() -> None:
+        nonlocal running_or_queued
+        running_or_queued = False
+
+    def handler() -> None:
+        nonlocal running_or_queued
+        if running_or_queued:
+            return
+        running_or_queued = True
+        try:
+            action()
+        except Exception:
+            _reset()
+            raise
+        ui.timer(0.2, _reset, once=True)
 
     return handler
 
@@ -270,7 +326,14 @@ def _run_solution_tests(
                 prompts=PromptConfig(on_success="", on_failure="", on_no_llm=""),
             )
             exercise = Exercise(exercise_config, global_config)
-            test_results = TestRunner().run(exercise, namespace)
+            test_names = [test_def.name for test_def in exercise.tests]
+            test_results = run_setup_code(
+                state.project.setup_code_for(exercise_config.id),
+                namespace,
+                test_names,
+            )
+            if test_results is None:
+                test_results = TestRunner().run(exercise, namespace)
     except Exception as exc:  # pragma: no cover - defensive UI feedback
         error = str(exc)
 
@@ -279,6 +342,11 @@ def _run_solution_tests(
         if error:
             ui.label(f"Error: {error}").classes("text-negative")
         else:
+            if not test_results:
+                ui.label("No unit tests are configured for this exercise.").classes(
+                    "text-caption text-grey-7"
+                )
+                return
             for result in test_results:
                 icon = "check_circle" if result.passed else "cancel"
                 color = "positive" if result.passed else "negative"
@@ -286,7 +354,10 @@ def _run_solution_tests(
                     ui.icon(icon).classes(f"text-{color}")
                     ui.label(result.name)
                     if result.message:
-                        ui.label(f"— {result.message}").classes("text-caption")
+                        ui.html(
+                            f'<div style="white-space: pre-wrap; font-family: monospace">'
+                            f"— {ansi_to_html(result.message)}</div>"
+                        ).classes("text-caption")
 
 
 def _build_generate_dialog(

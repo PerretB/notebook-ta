@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from nicegui import ui
@@ -12,6 +14,7 @@ from notebook_ta.bench.state import BenchAppState
 from notebook_ta.bench.storage import ProjectStore
 from notebook_ta.bench.ui.exercises_tab import _build_solutions, build
 from notebook_ta.config.models import ExerciseConfig
+from notebook_ta.testing.runner import TestResult as RunnerResult
 
 pytest_plugins = ["nicegui.testing.user_plugin"]
 
@@ -52,6 +55,87 @@ async def test_add_and_remove_solution_actions_ignore_queued_duplicate_clicks(
 
 @pytest.mark.asyncio
 @pytest.mark.nicegui_main_file("notebook_ta/bench/app.py")
+async def test_run_tests_renders_ansi_messages_as_html(user: User) -> None:
+    """Bench test results should render ANSI colors instead of showing control codes."""
+    state = BenchAppState(ProjectStore(None))
+    exercise = ExerciseConfig(id="ex1", statement="Example")
+    state.exercise_registry[exercise.id] = exercise
+    state.add_solution(exercise.id, code="answer = 1")
+
+    @ui.page("/")
+    def page() -> None:
+        """Render the solution controls under test."""
+        _build_solutions(state, exercise)
+
+    result = RunnerResult(
+        name="custom",
+        passed=True,
+        message="\033[92m✔ 1/1 tests passed.\033[0m",
+    )
+    with patch("notebook_ta.bench.ui.exercises_tab.TestRunner.run", return_value=[result]):
+        await user.open("/")
+        user.find("Run tests").click()
+        await user.should_see("1/1 tests passed.")
+
+    rendered_html = [element.content for element in user.find(ui.html).elements]
+    assert any("color: #00c000" in content for content in rendered_html)
+    assert all("\033[" not in content for content in rendered_html)
+
+
+@pytest.mark.asyncio
+@pytest.mark.nicegui_main_file("notebook_ta/bench/app.py")
+async def test_run_tests_drops_duplicate_clicks_when_setup_code_exists(user: User) -> None:
+    """A queued duplicate Run tests click must not run or render test results twice."""
+    state = BenchAppState(ProjectStore(None))
+    exercise = ExerciseConfig(id="ex1", statement="Example")
+    state.exercise_registry[exercise.id] = exercise
+    state.project.setup_code_by_exercise[exercise.id] = "expected = 1"
+    state.add_solution(exercise.id, code="answer = 1")
+
+    @ui.page("/")
+    def page() -> None:
+        """Render the solution controls under test."""
+        _build_solutions(state, exercise)
+
+    result = RunnerResult(name="custom", passed=True, message="passed once")
+    with patch(
+        "notebook_ta.bench.ui.exercises_tab.TestRunner.run",
+        return_value=[result],
+    ) as run:
+        await user.open("/")
+        button = user.find("Run tests")
+        button.click()
+        button.click()
+        await user.should_see("passed once")
+        await asyncio.sleep(0.3)
+
+    assert run.call_count == 1
+    rendered_html = [element.content for element in user.find(ui.html).elements]
+    assert sum("passed once" in content for content in rendered_html) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.nicegui_main_file("notebook_ta/bench/app.py")
+async def test_run_tests_reports_when_exercise_has_no_tests(user: User) -> None:
+    """Exercises without tests should produce visible feedback instead of appearing inert."""
+    state = BenchAppState(ProjectStore(None))
+    exercise = ExerciseConfig(id="ex1", statement="Example", tests=[])
+    state.exercise_registry[exercise.id] = exercise
+    state.add_solution(exercise.id, code="answer = 1")
+
+    @ui.page("/")
+    def page() -> None:
+        """Render the solution controls under test."""
+        _build_solutions(state, exercise)
+
+    await user.open("/")
+    user.find("Run tests").click()
+
+    await user.should_see("No unit tests are configured for this exercise.")
+
+
+@pytest.mark.asyncio
+@pytest.mark.nicegui_main_file("notebook_ta/bench/app.py")
 async def test_exercises_are_expanded_and_names_and_new_exercises_are_editable(
     user: User,
     tmp_path: Path,
@@ -79,8 +163,12 @@ async def test_exercises_are_expanded_and_names_and_new_exercises_are_editable(
     assert next(iter(expansions)).value is True
 
     user.find("Exercise name").type("Renamed exercise")
+    user.find("Add setup code").click()
+    user.find(ui.codemirror).type("expected = 5")
+    user.find("Save setup code").click()
     user.find("Solution name").type("Reference solution")
     assert state.exercise_registry["ex1"].name == "Renamed exercise"
+    assert state.project.setup_code_for("ex1") == "expected = 5"
     assert solution.label == "Reference solution"
 
     user.find("Add exercise").click()
@@ -92,5 +180,6 @@ async def test_exercises_are_expanded_and_names_and_new_exercises_are_editable(
     assert state.exercise_registry["ex2"].name == "Second exercise"
     reloaded = catalog_path.read_text(encoding="utf-8")
     assert "Renamed exercise" in reloaded
+    assert "expected = 5" not in reloaded
     assert "Second exercise" in reloaded
     await user.should_see("Second exercise")

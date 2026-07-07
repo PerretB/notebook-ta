@@ -229,6 +229,65 @@ class TestBenchExecutorSequential:
         assert record.metrics.token_usage.completion_tokens == 3
         assert record.metrics.token_usage.prompt_tokens == 10
 
+    @pytest.mark.asyncio
+    async def test_benchmark_setup_code_definitions_are_available_to_tests(self) -> None:
+        config = make_exercise(
+            tests=[
+                TestDefinition(
+                    name="uses setup value",
+                    code="def check(add, expected): return add(2, 3) == expected",
+                )
+            ]
+        )
+        job = BenchJob(
+            config,
+            make_solution(),
+            make_model("m1"),
+            make_prompt_version(),
+            "expected = 5",
+        )
+        provider = FakeProvider(["ok"])
+        run = BenchmarkRun(prompt_version_id="V1", model_labels=["m1"], job_count=1)
+        executor = BenchExecutor()
+        records = []
+
+        def on_progress(job, status, message, record) -> None:
+            if record is not None:
+                records.append(record)
+
+        with patch("notebook_ta.bench.executor.create_provider", return_value=provider):
+            await executor.run([job], run, on_progress)
+
+        assert records[0].status == "completed"
+        assert records[0].test_results[0].passed is True
+        assert records[0].input_snapshot.setup_code == "expected = 5"
+
+    @pytest.mark.asyncio
+    async def test_benchmark_setup_code_failure_becomes_failed_test_result(self) -> None:
+        config = make_exercise()
+        job = BenchJob(
+            config,
+            make_solution(),
+            make_model("m1"),
+            make_prompt_version(),
+            'raise RuntimeError("setup boom")',
+        )
+        provider = FakeProvider(["ok"])
+        run = BenchmarkRun(prompt_version_id="V1", model_labels=["m1"], job_count=1)
+        executor = BenchExecutor()
+        records = []
+
+        def on_progress(job, status, message, record) -> None:
+            if record is not None:
+                records.append(record)
+
+        with patch("notebook_ta.bench.executor.create_provider", return_value=provider):
+            await executor.run([job], run, on_progress)
+
+        assert records[0].status == "completed"
+        assert records[0].test_results[0].passed is False
+        assert "setup boom" in (records[0].test_results[0].message or "")
+
 
 class TestBenchExecutorPythonPath:
     @pytest.mark.asyncio

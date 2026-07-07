@@ -9,6 +9,8 @@ concurrent requests.
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import io
 import sys
 import time
 from collections.abc import Callable, Iterator
@@ -30,7 +32,7 @@ from notebook_ta.config.models import ExerciseConfig, GlobalConfig, PromptConfig
 from notebook_ta.exercise.definition import Exercise
 from notebook_ta.llm.base import LLMProvider, create_provider
 from notebook_ta.logging import get_logger
-from notebook_ta.testing.runner import TestRunner
+from notebook_ta.testing.runner import TestResult, TestRunner
 
 _log = get_logger("bench.executor")
 
@@ -43,6 +45,7 @@ class BenchJob:
     solution: StudentSolution
     model: ModelUnderTest
     prompt_version: PromptVersion
+    setup_code: str = ""
 
 
 # Called as on_progress(job, status, message, record). `record` is populated only
@@ -81,6 +84,7 @@ def build_jobs(
     solutions_by_exercise: dict[str, list[StudentSolution]],
     models: list[ModelUnderTest],
     prompt_version: PromptVersion,
+    setup_code_by_exercise: dict[str, str] | None = None,
 ) -> list[BenchJob]:
     """Build the full model x exercise x solution job matrix for a benchmark run.
 
@@ -90,12 +94,43 @@ def build_jobs(
     Ollama swapping models in and out of GPU/RAM) that would happen with an exercise-major
     ordering.
     """
+    setup_code_by_exercise = setup_code_by_exercise or {}
     jobs: list[BenchJob] = []
     for model in models:
         for exercise_config in exercises:
             for solution in solutions_by_exercise.get(exercise_config.id, []):
-                jobs.append(BenchJob(exercise_config, solution, model, prompt_version))
+                jobs.append(
+                    BenchJob(
+                        exercise_config,
+                        solution,
+                        model,
+                        prompt_version,
+                        setup_code_by_exercise.get(exercise_config.id, ""),
+                    )
+                )
     return jobs
+
+
+def run_setup_code(
+    setup_code: str, namespace: dict[str, object], test_names: list[str]
+) -> list[TestResult] | None:
+    """Run benchmark setup code and return failed test results if setup fails."""
+    if not setup_code:
+        return None
+    stdout_buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(stdout_buf):
+            exec(setup_code, namespace)  # noqa: S102 -- isolated authoring-time sandbox
+    except Exception as exc:
+        captured = stdout_buf.getvalue()
+        message = str(exc)
+        if captured:
+            message = f"{message}\nOutput: {captured}"
+        return [
+            TestResult(name=name, passed=False, message=f"Setup code failed: {message}")
+            for name in test_names
+        ]
+    return None
 
 
 class BenchExecutor:
@@ -173,7 +208,7 @@ class BenchExecutor:
     ) -> None:
         """Run unit tests + the LLM call for one job and report the resulting record."""
         on_progress(job, "generating", None, None)
-        snapshot = build_input_snapshot(job.exercise_config, job.solution)
+        snapshot = build_input_snapshot(job.exercise_config, job.solution, job.setup_code)
         global_config = _build_global_config(job.prompt_version, job.model)
         exercise = Exercise(job.exercise_config, global_config)
 
@@ -181,7 +216,10 @@ class BenchExecutor:
             namespace: dict[str, object] = {}
             with extended_sys_path(self._get_python_path_dirs()):
                 exec(job.solution.code, namespace)  # noqa: S102 -- isolated authoring-time sandbox
-                test_results = TestRunner().run(exercise, namespace)
+                test_names = [test_def.name for test_def in exercise.tests]
+                test_results = run_setup_code(job.setup_code, namespace, test_names)
+                if test_results is None:
+                    test_results = TestRunner().run(exercise, namespace)
             prompt = exercise.build_prompt(job.solution.code, test_results, hint_history=None)
 
             provider = self._get_provider(job.model)

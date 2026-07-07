@@ -10,6 +10,52 @@ from notebook_ta.bench.state import BenchAppState
 from notebook_ta.bench.ui._helpers import tracked_on_change
 from notebook_ta.config.models import LLMConfig
 
+_UI_DELETED_MESSAGES = (
+    "The client this element belongs to has been deleted.",
+    "The parent element this slot belongs to has been deleted.",
+    "The parent slot of the element has been deleted.",
+)
+
+
+def _is_deleted_ui_error(exc: RuntimeError) -> bool:
+    return any(message in str(exc) for message in _UI_DELETED_MESSAGES)
+
+
+def _job_key(job: BenchJob) -> str:
+    return f"{job.exercise_config.id}:{job.solution.id}:{job.model.label}"
+
+
+def _progress_status(status: str, message: str | None) -> str:
+    return status if not message else f"{status} ({message})"
+
+
+def _progress_row(job: BenchJob, status: str, message: str | None = None) -> dict[str, str]:
+    return {
+        "key": _job_key(job),
+        "exercise": job.exercise_config.id,
+        "solution": job.solution.label or job.solution.id[:8],
+        "model": job.model.label,
+        "status": _progress_status(status, message),
+    }
+
+
+def _initial_progress_rows(jobs: list[BenchJob]) -> dict[str, dict[str, str]]:
+    return {_job_key(job): _progress_row(job, "queued") for job in jobs}
+
+
+def _finished_job_count(progress_rows: dict[str, dict[str, str]]) -> int:
+    return sum(
+        1
+        for row in progress_rows.values()
+        if row["status"].startswith(("completed", "failed"))
+    )
+
+
+def _progress_value(progress_rows: dict[str, dict[str, str]], total_jobs: int) -> float:
+    if total_jobs <= 0:
+        return 0
+    return min(_finished_job_count(progress_rows) / total_jobs, 1)
+
 
 def build(state: BenchAppState) -> None:
     """Render the Runner tab."""
@@ -135,42 +181,62 @@ def build(state: BenchAppState) -> None:
         retry_button.set_visibility(False)
 
         progress_rows: dict[str, dict[str, str]] = {}
+        total_jobs = 0
+        ui_detached = False
 
         def _on_progress(job: BenchJob, status: str, message, record) -> None:
-            key = f"{job.exercise_config.id}:{job.solution.id}:{job.model.label}"
-            progress_rows[key] = {
-                "key": key,
-                "exercise": job.exercise_config.id,
-                "solution": job.solution.label or job.solution.id[:8],
-                "model": job.model.label,
-                "status": status if not message else f"{status} ({message})",
-            }
-            progress_table.rows = list(progress_rows.values())
-            done = sum(
-                1
-                for r in progress_rows.values()
-                if r["status"].startswith(("completed", "failed"))
-            )
-            progress_bar.value = done / max(len(progress_rows), 1)
-            status_label.set_text(status)
-            retry_button.set_visibility(status == "paused")
-            progress_table.update()
+            nonlocal ui_detached
+            progress_rows[_job_key(job)] = _progress_row(job, status, message)
+            if ui_detached:
+                return
+            try:
+                progress_table.rows = list(progress_rows.values())
+                done = _finished_job_count(progress_rows)
+                progress_bar.value = _progress_value(progress_rows, total_jobs)
+                status_label.set_text(f"{status}: {done}/{total_jobs} finished")
+                retry_button.set_visibility(status == "paused")
+                progress_table.update()
+            except RuntimeError as exc:
+                if not _is_deleted_ui_error(exc):
+                    raise
+                ui_detached = True
 
         async def _run_benchmark() -> None:
+            nonlocal total_jobs, ui_detached
             if not project.draft_selected_model_labels:
                 ui.notify("Select at least one model to test.", type="warning")
                 return
-            progress_rows.clear()
-            progress_table.rows = []
             run, jobs = state.build_run_jobs(name=run_name_input.value)
             if not jobs:
                 ui.notify("No (exercise, solution) pairs to run yet.", type="warning")
                 return
-            status_label.set_text(f"Running '{run.name}'…")
+            total_jobs = len(jobs)
+            ui_detached = False
+            progress_rows.clear()
+            progress_rows.update(_initial_progress_rows(jobs))
+            try:
+                progress_table.rows = list(progress_rows.values())
+                progress_bar.value = 0
+                status_label.set_text(f"Running '{run.name}': 0/{total_jobs} finished")
+                progress_table.update()
+            except RuntimeError as exc:
+                if not _is_deleted_ui_error(exc):
+                    raise
+                ui_detached = True
             await state.run_benchmark(jobs, run, _on_progress)
-            status_label.set_text(f"'{run.name}': {run.status}")
-            ui.notify(f"Benchmark run '{run.name}' {run.status}.", type="positive")
-            refresh_run_history.refresh()
+            if ui_detached:
+                return
+            try:
+                done = _finished_job_count(progress_rows)
+                progress_bar.value = _progress_value(progress_rows, total_jobs)
+                status_label.set_text(
+                    f"'{run.name}': {run.status} ({done}/{total_jobs} finished)"
+                )
+                ui.notify(f"Benchmark run '{run.name}' {run.status}.", type="positive")
+                refresh_run_history.refresh()
+            except RuntimeError as exc:
+                if not _is_deleted_ui_error(exc):
+                    raise
 
         ui.button("Run Benchmark", on_click=_run_benchmark).classes("bg-primary")
 

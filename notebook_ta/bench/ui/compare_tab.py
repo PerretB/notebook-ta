@@ -325,7 +325,7 @@ def _render_exercise_matrix(
                     config,
                     solution,
                     record,
-                    is_stale(record, config, solution),
+                    is_stale(record, config, solution, project.setup_code_for(config.id)),
                     refresh_matrix,
                 )
 

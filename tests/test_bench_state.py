@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
-from notebook_ta.bench.models import DEFAULT_SOLUTION_TAGS, ExecutionRecord, InputSnapshot
+from notebook_ta.bench.models import (
+    DEFAULT_SOLUTION_TAGS,
+    ExecutionRecord,
+    InputSnapshot,
+    ModelUnderTest,
+)
 from notebook_ta.bench.state import BenchAppState
 from notebook_ta.bench.storage import ProjectStore
+from notebook_ta.config.models import ExerciseConfig, LLMConfig
 
 
 def make_state() -> BenchAppState:
@@ -34,6 +40,39 @@ class TestRunNaming:
         state = make_state()
         assert state.dirty is False
         state.build_run_jobs()
+        assert state.dirty is True
+
+    def test_build_run_jobs_carries_project_setup_code(self) -> None:
+        state = make_state()
+        state.exercise_registry["ex1"] = ExerciseConfig(id="ex1", statement="Example")
+        state.add_solution("ex1")
+        state.project.models_under_test.append(
+            ModelUnderTest(
+                label="m1",
+                llm_config=LLMConfig(
+                    provider="ollama",
+                    model="llama3.2:3b",
+                    base_url="http://localhost:11434",
+                ),
+            )
+        )
+        state.project.draft_selected_model_labels = ["m1"]
+        state.update_exercise_setup_code("ex1", "expected = 5")
+
+        _run, jobs = state.build_run_jobs()
+
+        assert jobs[0].setup_code == "expected = 5"
+
+    def test_update_exercise_setup_code_marks_project_dirty_and_removes_blank_values(self) -> None:
+        state = make_state()
+
+        state.update_exercise_setup_code("ex1", "expected = 5")
+        assert state.project.setup_code_for("ex1") == "expected = 5"
+        assert state.dirty is True
+
+        state.dirty = False
+        state.update_exercise_setup_code("ex1", "   ")
+        assert state.project.setup_code_for("ex1") == ""
         assert state.dirty is True
 
 

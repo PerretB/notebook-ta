@@ -104,6 +104,7 @@ class InputSnapshot(BaseModel):
 
     exercise_statement: str
     additional_info: str | None = None
+    setup_code: str | None = None
     tests_serialized: str
     student_code: str
     exercise_hash: str
@@ -164,6 +165,7 @@ class BenchProject(BaseModel):
     draft_prompt_on_failure: str = ""
     draft_selected_model_labels: list[str] = []
     draft_run_name: str = ""
+    setup_code_by_exercise: dict[str, str] = Field(default_factory=dict)
     solutions: list[StudentSolution] = []
     prompt_versions: list[PromptVersion] = []
     models_under_test: list[ModelUnderTest] = []
@@ -177,6 +179,10 @@ class BenchProject(BaseModel):
     def solutions_for(self, exercise_id: str) -> list[StudentSolution]:
         """Return all student solutions attached to the given exercise."""
         return [s for s in self.solutions if s.exercise_id == exercise_id]
+
+    def setup_code_for(self, exercise_id: str) -> str:
+        """Return benchmark-only setup code configured for ``exercise_id``."""
+        return self.setup_code_by_exercise.get(exercise_id, "")
 
     def latest_record(
         self, exercise_id: str, solution_id: str, model_label: str, prompt_version_id: str

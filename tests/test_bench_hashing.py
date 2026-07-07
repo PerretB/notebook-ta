@@ -37,6 +37,11 @@ class TestHashStability:
         changed = compute_exercise_hash(make_exercise(additional_info="Use recursion."))
         assert original != changed
 
+    def test_setup_code_change_changes_hash(self) -> None:
+        original = compute_exercise_hash(make_exercise())
+        changed = compute_exercise_hash(make_exercise(), setup_code="expected = 5")
+        assert original != changed
+
     def test_test_definitions_change_changes_hash(self) -> None:
         original = compute_exercise_hash(make_exercise())
         changed = compute_exercise_hash(
@@ -55,9 +60,10 @@ class TestInputSnapshot:
     def test_snapshot_captures_verbatim_fields(self) -> None:
         config = make_exercise(additional_info="info")
         solution = make_solution()
-        snapshot = build_input_snapshot(config, solution)
+        snapshot = build_input_snapshot(config, solution, setup_code="expected = 5")
         assert snapshot.exercise_statement == config.statement
         assert snapshot.additional_info == "info"
+        assert snapshot.setup_code == "expected = 5"
         assert snapshot.student_code == solution.code
         assert snapshot.combined_hash
 
@@ -85,6 +91,13 @@ class TestIsStale:
         record = ExecutionRecordStub(snapshot)
         drifted_solution = make_solution(code="def add(a, b): return a - b")
         assert is_stale(record, config, drifted_solution) is True
+
+    def test_stale_when_setup_code_changes(self) -> None:
+        config = make_exercise()
+        solution = make_solution()
+        snapshot = build_input_snapshot(config, solution, setup_code="expected = 5")
+        record = ExecutionRecordStub(snapshot)
+        assert is_stale(record, config, solution, live_setup_code="expected = 6") is True
 
 
 class ExecutionRecordStub:

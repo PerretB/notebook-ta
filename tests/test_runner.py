@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
-import pytest
-
-from notebook_ta.config.models import ExerciseConfig, GlobalConfig, LLMConfig, PromptConfig, TestDefinition
+from notebook_ta.config.models import (
+    ExerciseConfig,
+    GlobalConfig,
+    LLMConfig,
+    PromptConfig,
+    TestDefinition,
+)
 from notebook_ta.exercise.definition import Exercise
-from notebook_ta.testing.runner import TestResult, TestRunner
+from notebook_ta.testing.runner import TestRunner
 
 
 # ---------------------------------------------------------------------------

@@ -60,6 +60,12 @@ class TestBenchProjectHelpers:
         assert len(result) == 1
         assert result[0].code == "a"
 
+    def test_setup_code_for_returns_project_value_or_empty_string(self) -> None:
+        project = BenchProject(settings=make_settings())
+        assert project.setup_code_for("ex1") == ""
+        project.setup_code_by_exercise["ex1"] = "expected = 5"
+        assert project.setup_code_for("ex1") == "expected = 5"
+
     def test_latest_record_returns_most_recent(self) -> None:
         project = BenchProject(settings=make_settings())
         older = ExecutionRecord(
@@ -119,6 +125,14 @@ class TestBenchProjectSerialization:
         restored = BenchProject.model_validate_json(data)
         assert restored.models_under_test[0].label == "llama3.2:3b (ollama)"
         assert restored.schema_version == project.schema_version
+
+    def test_project_setup_code_round_trips_json(self) -> None:
+        project = BenchProject(settings=make_settings())
+        project.setup_code_by_exercise["ex1"] = "expected = 5"
+
+        restored = BenchProject.model_validate_json(project.model_dump_json())
+
+        assert restored.setup_code_for("ex1") == "expected = 5"
 
     def test_project_without_tag_colors_loads_with_defaults(self) -> None:
         project = BenchProject(settings=make_settings())

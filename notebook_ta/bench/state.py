@@ -167,6 +167,15 @@ class BenchAppState:
         set_exercise_name(self._editable_catalog_path(), exercise_id, normalized_name)
         exercise.name = normalized_name or None
 
+    def update_exercise_setup_code(self, exercise_id: str, setup_code: str) -> None:
+        """Update benchmark-only setup code for an exercise in the project file."""
+        normalized_setup_code = setup_code if setup_code.strip() else ""
+        if normalized_setup_code:
+            self.project.setup_code_by_exercise[exercise_id] = normalized_setup_code
+        else:
+            self.project.setup_code_by_exercise.pop(exercise_id, None)
+        self.mark_dirty()
+
     def _editable_catalog_path(self) -> str:
         """Return the configured catalog path or raise a descriptive authoring error."""
         path = self.project.settings.exercises_toml_path
@@ -249,7 +258,11 @@ class BenchAppState:
             solutions_by_exercise.setdefault(solution.exercise_id, []).append(solution)
 
         jobs = build_jobs(
-            list(self.exercise_registry.values()), solutions_by_exercise, selected, prompt_version
+            list(self.exercise_registry.values()),
+            solutions_by_exercise,
+            selected,
+            prompt_version,
+            self.project.setup_code_by_exercise,
         )
 
         run = BenchmarkRun(
@@ -308,7 +321,13 @@ class BenchAppState:
             prompt_version_id=prompt_version_id, model_labels=[model_label], job_count=1
         )
         self.project.runs.append(run)
-        job = BenchJob(config, solution, model, prompt_version)
+        job = BenchJob(
+            config,
+            solution,
+            model,
+            prompt_version,
+            self.project.setup_code_for(config.id),
+        )
 
         async def _do_rerun() -> ExecutionRecord:
             record = await self.executor.run_single(job, run)

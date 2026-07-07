@@ -36,8 +36,10 @@ list starts with `correct`, `wrong complexity`, `logic flow`, and `missing edge-
 2. **Exercises** — exercises are expanded by default and their solution cards are arranged side by
    side with horizontal scrolling. Edit exercise and solution display names inline, append new
    exercises to a local TOML catalog, add solutions manually or with the internal model, tag them
-   (e.g. `correct`, `wrong complexity`), and run their unit tests. Exercise edits preserve the
-   catalog's comments and formatting; remote TOML catalogs are read-only.
+   (e.g. `correct`, `wrong complexity`), and run their unit tests. For each exercise,
+   benchmark-only setup code can define helper variables or functions before unit tests run; this
+   setup is saved in the benchmark project JSON file, not in `exercises.toml`. Exercise edits
+   preserve the catalog's comments and formatting; remote TOML catalogs are read-only.
 3. **Runner** — write the `on_success` / `on_failure` prompts to test, select one or more models,
    and click **Run Benchmark**. Prompts are frozen into a versioned snapshot (`V1`, `V2`, ...) the
    moment you click Run, so past results always remain reproducible even if you keep editing the
@@ -55,5 +57,6 @@ list starts with `correct`, `wrong complexity`, `logic flow`, and `missing edge-
 
 ## Project files
 
-Everything (settings, student solutions, prompt version history, and the full execution history
-with metrics) is saved to a single JSON project file via the **Save** button or autosave.
+Everything (settings, per-exercise setup code, student solutions, prompt version history, and the
+full execution history with metrics) is saved to a single JSON project file via the **Save** button
+or autosave.

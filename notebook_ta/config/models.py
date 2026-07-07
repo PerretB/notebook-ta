@@ -21,7 +21,7 @@ class LLMConfig(BaseModel):
     model: str
     base_url: str
     api_key: str | None = None
-    timeout: int = 120
+    timeout: int = 180
     temperature: float = 0.7
     streaming: bool = True
     available_models: list[ModelSpec] = []
