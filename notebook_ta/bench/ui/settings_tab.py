@@ -81,6 +81,13 @@ def build(
             value=project.settings.autosave_interval_seconds,
             on_change=tracked_on_change(state, project.settings, "autosave_interval_seconds", int),
         )
+        ui.number(
+            "Unit test timeout (s)",
+            value=project.settings.unit_test_timeout,
+            min=0.1,
+            step=0.5,
+            on_change=tracked_on_change(state, project.settings, "unit_test_timeout", float),
+        )
 
     with ui.card().classes("w-full"):
         ui.label("Internal Model").classes("text-md font-bold")

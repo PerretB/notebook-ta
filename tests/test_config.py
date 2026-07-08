@@ -6,24 +6,22 @@ import textwrap
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from notebook_ta.config.loader import load_exercises, load_global
 from notebook_ta.config.models import (
     ConfigurationError,
-    ExerciseConfig,
     GlobalConfig,
-    LLMConfig,
-    ModelSpec,
-    PromptConfig,
     TestDefinition,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
 GLOBAL_TOML_CONTENT = textwrap.dedent("""\
+    unit_test_timeout = 2.5
+
     [llm]
     provider = "ollama"
     model = "llama3.2:3b"
@@ -53,6 +51,7 @@ GLOBAL_TOML_CONTENT = textwrap.dedent("""\
 EXERCISES_TOML_CONTENT = textwrap.dedent("""\
     [exercises.ex1]
     statement = "Write an add function."
+    unit_test_timeout = 1.5
 
     [[exercises.ex1.tests]]
     name = "Test add(2,3)"
@@ -97,6 +96,7 @@ class TestLoadGlobal:
         assert cfg.llm.model == "llama3.2:3b"
         assert cfg.llm.timeout == 60
         assert cfg.llm.streaming is True
+        assert cfg.unit_test_timeout == 2.5
         assert len(cfg.llm.available_models) == 2
         assert cfg.prompts.on_success == "Great job!"
         assert cfg.prompts.hint_history_length == 3
@@ -136,6 +136,7 @@ class TestLoadExercises:
         exercises = load_exercises(exercises_file)
         ex1 = next(e for e in exercises if e.id == "ex1")
         assert ex1.statement == "Write an add function."
+        assert ex1.unit_test_timeout == 1.5
         assert len(ex1.tests) == 1
         assert ex1.tests[0].code is not None
         assert ex1.tests[0].module is None
@@ -166,6 +167,25 @@ class TestLoadExercises:
         assert result[0].id == "ex_no_stmt"
         assert result[0].statement is None
 
+    def test_global_unit_test_timeout_defaults_to_five_seconds(self, tmp_path: Path) -> None:
+        content = textwrap.dedent("""\
+            [llm]
+            provider = "ollama"
+            model = "llama3.2:3b"
+            base_url = "http://localhost:11434"
+
+            [prompts]
+            on_success = "Great job!"
+            on_failure = "Try again."
+            on_no_llm = "LLM unavailable."
+        """)
+        f = tmp_path / "default_timeout.toml"
+        f.write_text(content, encoding="utf-8")
+
+        cfg = load_global(f)
+
+        assert cfg.unit_test_timeout == 5.0
+
 
 # ---------------------------------------------------------------------------
 # TestDefinition model validation
@@ -181,15 +201,15 @@ class TestTestDefinitionValidation:
         assert td.module == "my.module"
 
     def test_both_raises(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             TestDefinition(name="t", code="def f(): pass", module="m", function="f")
 
     def test_neither_raises(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             TestDefinition(name="t")
 
     def test_module_without_function_raises(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             TestDefinition(name="t", module="my.module")
 
 

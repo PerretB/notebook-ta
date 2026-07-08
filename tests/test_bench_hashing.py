@@ -42,6 +42,11 @@ class TestHashStability:
         changed = compute_exercise_hash(make_exercise(), setup_code="expected = 5")
         assert original != changed
 
+    def test_unit_test_timeout_change_changes_hash(self) -> None:
+        original = compute_exercise_hash(make_exercise())
+        changed = compute_exercise_hash(make_exercise(unit_test_timeout=10.0))
+        assert original != changed
+
     def test_test_definitions_change_changes_hash(self) -> None:
         original = compute_exercise_hash(make_exercise())
         changed = compute_exercise_hash(

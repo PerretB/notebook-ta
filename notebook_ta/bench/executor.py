@@ -13,9 +13,10 @@ import contextlib
 import io
 import sys
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from typing import cast
 
 from notebook_ta.bench.hashing import build_input_snapshot
 from notebook_ta.bench.models import (
@@ -136,10 +137,15 @@ def run_setup_code(
 class BenchExecutor:
     """Runs a benchmark job matrix sequentially, one LLM call at a time."""
 
-    def __init__(self, python_path_dirs: Callable[[], list[str]] | None = None) -> None:
+    def __init__(
+        self,
+        python_path_dirs: Callable[[], list[str]] | None = None,
+        unit_test_timeout: Callable[[], float] | None = None,
+    ) -> None:
         """`python_path_dirs`, if given, is called fresh before every job so that changes
         made in the Settings tab while a run is in progress take effect immediately."""
         self._get_python_path_dirs = python_path_dirs or (lambda: [])
+        self._get_unit_test_timeout = unit_test_timeout or (lambda: 5.0)
         self._provider_cache: dict[str, LLMProvider] = {}
         self._cancel_requested = False
         self._retry_event: asyncio.Event | None = None
@@ -210,6 +216,7 @@ class BenchExecutor:
         on_progress(job, "generating", None, None)
         snapshot = build_input_snapshot(job.exercise_config, job.solution, job.setup_code)
         global_config = _build_global_config(job.prompt_version, job.model)
+        global_config.unit_test_timeout = self._get_unit_test_timeout()
         exercise = Exercise(job.exercise_config, global_config)
 
         try:
@@ -268,7 +275,8 @@ class BenchExecutor:
         start = time.monotonic()
         first_token_time: float | None = None
         chunks: list[str] = []
-        async for chunk in provider.stream(prompt):
+        stream = cast(AsyncIterator[str], provider.stream(prompt))
+        async for chunk in stream:
             if first_token_time is None:
                 first_token_time = time.monotonic()
             chunks.append(chunk)

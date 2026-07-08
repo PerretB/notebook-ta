@@ -2,19 +2,15 @@
 
 from __future__ import annotations
 
-import pytest
-
 from notebook_ta.config.models import (
     ExerciseConfig,
     GlobalConfig,
     LLMConfig,
     PromptConfig,
-    TestDefinition,
 )
-from notebook_ta.exercise.definition import Exercise, _SYSTEM_PREAMBLE
+from notebook_ta.exercise.definition import _SYSTEM_PREAMBLE, Exercise
 from notebook_ta.notebook.session import HintExchange
 from notebook_ta.testing.runner import TestResult
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -132,6 +128,15 @@ class TestPromptSections:
         assert "Unit Test Results" not in prompt_pass
         assert "Unit Test Results" in prompt_fail
         assert "Wrong answer" in prompt_fail
+
+    def test_timeout_failure_message_is_included(self) -> None:
+        ex = make_exercise()
+        timeout_message = "Unit test timed out after 0.2 seconds and was cancelled."
+        results = [TestResult("slow", False, timeout_message)]
+
+        prompt = ex.build_prompt("code", results)
+
+        assert timeout_message in prompt
 
     def test_hint_history_block_present_when_history_given(self) -> None:
         ex = make_exercise()

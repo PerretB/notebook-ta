@@ -44,6 +44,7 @@ class BenchSettings(BaseModel):
     """Global settings for a benchmarking project."""
 
     internal_model: LLMConfig
+    unit_test_timeout: float = Field(default=5.0, gt=0)
     python_path_dirs: list[str] = []
     known_tags: list[str] = Field(default_factory=lambda: list(DEFAULT_SOLUTION_TAGS))
     tag_colors: dict[str, str] = Field(default_factory=lambda: dict(DEFAULT_TAG_COLORS))

@@ -60,7 +60,7 @@ class BenchAppState:
         self.exercise_registry: dict[str, ExerciseConfig] = {}
         self.dirty: bool = False
         self.active_run: BenchmarkRun | None = None
-        self.executor = BenchExecutor(lambda: self.project.settings.python_path_dirs)
+        self.executor = self._create_executor()
         if self.project.settings.exercises_toml_path:
             self.reload_exercise_catalog()
 
@@ -99,7 +99,7 @@ class BenchAppState:
         self.project_open = True
         self.recent_project_path = new_path
         self.suggested_project_filename = new_path.name
-        self.executor = BenchExecutor(lambda: self.project.settings.python_path_dirs)
+        self.executor = self._create_executor()
 
     def create_project(self, name: str, exercises_toml_path: str | Path) -> None:
         """Create a new unsaved project initialized from an exercise TOML catalog."""
@@ -113,7 +113,7 @@ class BenchAppState:
         self.project = self.store.load()
         self.project.settings.exercises_toml_path = str(catalog_path)
         self.exercise_registry = {exercise.id: exercise for exercise in exercises}
-        self.executor = BenchExecutor(lambda: self.project.settings.python_path_dirs)
+        self.executor = self._create_executor()
         self.active_run = None
         self.project_open = True
         self.suggested_project_filename = _project_filename(normalized_name)
@@ -126,13 +126,20 @@ class BenchAppState:
         self.store = ProjectStore(None)
         self.project = self.store.load()
         self.exercise_registry = {}
-        self.executor = BenchExecutor(lambda: self.project.settings.python_path_dirs)
+        self.executor = self._create_executor()
         self.active_run = None
         self.project_open = False
         self.suggested_project_filename = "benchmark-project.json"
         self.dirty = False
 
     # -- exercise catalog ----------------------------------------------------
+
+    def _create_executor(self) -> BenchExecutor:
+        """Create a benchmark executor backed by the current project settings."""
+        return BenchExecutor(
+            lambda: self.project.settings.python_path_dirs,
+            lambda: self.project.settings.unit_test_timeout,
+        )
 
     def reload_exercise_catalog(self) -> None:
         """(Re)load the exercise TOML catalog referenced by project settings."""

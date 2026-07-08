@@ -39,6 +39,7 @@ class TestBenchProjectHelpers:
     def test_tag_colors_have_defaults_and_safe_fallback(self) -> None:
         settings = make_settings()
 
+        assert settings.unit_test_timeout == 5.0
         assert settings.tag_colors == DEFAULT_TAG_COLORS
         assert settings.color_for_tag("custom") == DEFAULT_TAG_COLOR
         settings.tag_colors["custom"] = "not-a-color"

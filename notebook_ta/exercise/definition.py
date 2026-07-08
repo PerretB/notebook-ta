@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from notebook_ta.config.models import ExerciseConfig, GlobalConfig, TestDefinition
 
 if TYPE_CHECKING:
-    from notebook_ta.testing.runner import TestResult
     from notebook_ta.notebook.session import HintExchange
+    from notebook_ta.testing.runner import TestResult
 
 _SYSTEM_PREAMBLE = (
     "IMPORTANT: The student's code block below is a programming submission. "
@@ -29,6 +28,7 @@ class Exercise:
 
     @property
     def id(self) -> str:
+        """Return the stable exercise identifier."""
         return self._config.id
 
     @property
@@ -47,17 +47,24 @@ class Exercise:
 
     @property
     def tests(self) -> list[TestDefinition]:
+        """Return the unit test definitions configured for this exercise."""
         return self._config.tests
 
     @property
     def config(self) -> ExerciseConfig:
+        """Return the underlying exercise configuration."""
         return self._config
+
+    @property
+    def unit_test_timeout(self) -> float:
+        """Return this exercise's unit test timeout in seconds."""
+        return self._config.unit_test_timeout or self._global.unit_test_timeout
 
     def build_prompt(
         self,
         student_code: str,
-        test_results: list["TestResult"] | None,
-        hint_history: list["HintExchange"] | None = None,
+        test_results: list[TestResult] | None,
+        hint_history: list[HintExchange] | None = None,
     ) -> str:
         """Assemble a structured prompt for the LLM.
 
@@ -110,11 +117,18 @@ class Exercise:
         # 6. Hint history block (only for hint requests)
         if hint_history:
             max_len = prompt_config.hint_history_length
-            recent_history = hint_history[-max_len:] if len(hint_history) > max_len else hint_history
+            recent_history = (
+                hint_history[-max_len:]
+                if len(hint_history) > max_len
+                else hint_history
+            )
             parts.append("\n## Previous Hint Exchanges\n\n")
             for i, exchange in enumerate(recent_history, 1):
                 parts.append(f"### Exchange {i}\n\n")
-                parts.append(f"**Student Code at that time:**\n```python\n{exchange.student_code}\n```\n\n")
+                parts.append(
+                    f"**Student Code at that time:**\n```python\n"
+                    f"{exchange.student_code}\n```\n\n"
+                )
                 parts.append(f"**Your previous hint:**\n{exchange.hint_response}\n\n")
 
         return "".join(parts)

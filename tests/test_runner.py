@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from notebook_ta.config.models import (
     ExerciseConfig,
     GlobalConfig,
@@ -12,7 +14,6 @@ from notebook_ta.config.models import (
 from notebook_ta.exercise.definition import Exercise
 from notebook_ta.testing.runner import TestRunner
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -21,8 +22,18 @@ def make_runner() -> TestRunner:
     return TestRunner()
 
 
-def make_exercise(tests: list[TestDefinition]) -> Exercise:
-    cfg = ExerciseConfig(id="ex", statement="Test exercise", tests=tests)
+def make_exercise(
+    tests: list[TestDefinition],
+    *,
+    global_timeout: float = 5.0,
+    exercise_timeout: float | None = None,
+) -> Exercise:
+    cfg = ExerciseConfig(
+        id="ex",
+        statement="Test exercise",
+        tests=tests,
+        unit_test_timeout=exercise_timeout,
+    )
     global_cfg = GlobalConfig(
         llm=LLMConfig(provider="ollama", model="llama3.2:3b", base_url="http://localhost:11434"),
         prompts=PromptConfig(
@@ -31,6 +42,7 @@ def make_exercise(tests: list[TestDefinition]) -> Exercise:
             on_hints="h",
             on_no_llm="n",
         ),
+        unit_test_timeout=global_timeout,
     )
     return Exercise(config=cfg, global_config=global_cfg)
 
@@ -228,3 +240,42 @@ class TestMultipleTests:
         results = make_runner().run(ex, {"add": lambda a, b: a + b})
         assert len(results) == 2
         assert all(r.passed for r in results)
+
+
+# ---------------------------------------------------------------------------
+# Timeout handling
+# ---------------------------------------------------------------------------
+
+class TestTimeoutHandling:
+    def test_timeout_fails_and_cancels_unit_test(self) -> None:
+        code = """\
+def test_slow(add):
+    import time
+    time.sleep(2)
+    return True
+"""
+        td = TestDefinition(name="slow", code=code)
+        ex = make_exercise([td], global_timeout=0.2)
+        start = time.monotonic()
+
+        results = make_runner().run(ex, {"add": lambda a, b: a + b})
+
+        assert time.monotonic() - start < 1.5
+        assert results[0].passed is False
+        assert "timed out after 0.2 seconds" in (results[0].message or "")
+        assert "cancelled" in (results[0].message or "")
+
+    def test_exercise_timeout_overrides_global_timeout(self) -> None:
+        code = """\
+def test_slow(add):
+    import time
+    time.sleep(2)
+    return True
+"""
+        td = TestDefinition(name="slow", code=code)
+        ex = make_exercise([td], global_timeout=5.0, exercise_timeout=0.2)
+
+        results = make_runner().run(ex, {"add": lambda a, b: a + b})
+
+        assert results[0].passed is False
+        assert "timed out after 0.2 seconds" in (results[0].message or "")

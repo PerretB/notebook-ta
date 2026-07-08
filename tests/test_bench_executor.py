@@ -230,6 +230,41 @@ class TestBenchExecutorSequential:
         assert record.metrics.token_usage.prompt_tokens == 10
 
     @pytest.mark.asyncio
+    async def test_benchmark_unit_test_timeout_is_recorded_and_prompted(self) -> None:
+        config = make_exercise(
+            tests=[
+                TestDefinition(
+                    name="slow",
+                    code="""\
+def slow(add):
+    import time
+    time.sleep(2)
+    return True
+""",
+                )
+            ]
+        )
+        job = BenchJob(config, make_solution(), make_model("m1"), make_prompt_version())
+        provider = FakeProvider(["ok"])
+
+        run = BenchmarkRun(prompt_version_id="V1", model_labels=["m1"], job_count=1)
+        executor = BenchExecutor(unit_test_timeout=lambda: 0.2)
+        records = []
+
+        def on_progress(job, status, message, record) -> None:
+            if record is not None:
+                records.append(record)
+
+        with patch("notebook_ta.bench.executor.create_provider", return_value=provider):
+            await executor.run([job], run, on_progress)
+
+        record = records[0]
+        message = record.test_results[0].message or ""
+        assert record.test_results[0].passed is False
+        assert "timed out after 0.2 seconds" in message
+        assert "timed out after 0.2 seconds" in record.full_prompt
+
+    @pytest.mark.asyncio
     async def test_benchmark_setup_code_definitions_are_available_to_tests(self) -> None:
         config = make_exercise(
             tests=[

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 
 class ModelSpec(BaseModel):
@@ -72,6 +72,7 @@ class ExerciseConfig(BaseModel):
     additional_info: str | None = None
     prompt_on_success: str | None = None
     prompt_on_failure: str | None = None
+    unit_test_timeout: float | None = Field(default=None, gt=0)
     tests: list[TestDefinition] = []
 
 
@@ -80,6 +81,7 @@ class GlobalConfig(BaseModel):
 
     llm: LLMConfig
     prompts: PromptConfig
+    unit_test_timeout: float = Field(default=5.0, gt=0)
 
 
 class ConfigurationError(Exception):

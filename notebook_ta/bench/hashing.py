@@ -1,8 +1,8 @@
 """Stale/drift detection hashing for the benchmarking tool.
 
 Per the architecture decision, the drift hash covers the exercise `statement`,
-`additional_info`, benchmark-only setup code, the serialized unit test definitions,
-and the student solution code.
+`additional_info`, benchmark-only setup code, configured timeout, the serialized
+unit test definitions, and the student solution code.
 A change to any of these marks a benchmark result as stale.
 """
 
@@ -32,6 +32,7 @@ def compute_exercise_hash(config: ExerciseConfig, setup_code: str | None = None)
         "statement": config.statement,
         "additional_info": config.additional_info,
         "setup_code": setup_code or None,
+        "unit_test_timeout": config.unit_test_timeout,
         "tests": _serialize_tests(config.tests),
     }
     return _hash(payload)

@@ -79,6 +79,20 @@ function = "test_performance"
 
 The module must be importable from the notebook's working directory or `PYTHONPATH`.
 
+### Unit Test Timeouts
+
+Each unit test is cancelled if it runs longer than the global `unit_test_timeout` from
+`global_config.toml`. The default is 5 seconds. A timeout is reported as a failed test in the
+notebook and in benchmark runs, and the timeout message is included in the LLM prompt.
+
+Override the timeout for one exercise with `unit_test_timeout`:
+
+```toml
+[exercises.ex_slow]
+statement = "Implement a function that handles a large input."
+unit_test_timeout = 15.0
+```
+
 ---
 
 ## Exercise-Level Prompt Overrides

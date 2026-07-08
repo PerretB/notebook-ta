@@ -52,6 +52,12 @@ requirements are met by the detected hardware.
 | `on_no_llm` | string | — | Message shown when LLM is unreachable |
 | `hint_history_length` | integer | `3` | Max previous hint exchanges included in context |
 
+### Global Unit Test Settings
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `unit_test_timeout` | number | `5.0` | Maximum wall-clock seconds allowed for each configured unit test. Timed-out tests are cancelled and reported as failures. |
+
 ---
 
 ## `exercises.toml`
@@ -65,6 +71,7 @@ Each exercise is declared under `[exercises.<id>]`.
 | `statement` | string | ❌ | Exercise description passed to the LLM. May be omitted if the statement is embedded in the notebook (see [Embedding statements in the notebook](authoring_exercises.md#embedding-statements-in-the-notebook)) |
 | `additional_info` | string | ❌ | Any other context for the LLM |
 | `prompt_on_success` | string | ❌ | Overrides global `on_success` |
+| `unit_test_timeout` | number | optional | Overrides the global unit test timeout for this exercise |
 | `prompt_on_failure` | string | ❌ | Overrides global `on_failure` |
 
 > **Note** — either `statement` in the TOML *or* a `<div id="<id>">` block in the notebook markdown must be provided for every exercise.  If neither is present, `notebook_ta.load()` raises a `ConfigurationError`.
@@ -85,6 +92,8 @@ Exactly one of `code` or (`module` + `function`) must be specified.
 ## Example
 
 ```toml
+unit_test_timeout = 5.0
+
 [llm]
 provider = "ollama"
 model = "auto"
