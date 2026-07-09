@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release, for example v0.1.0"
+        required: true
+        type: string
+      test_pypi:
+        description: "Upload to TestPyPI instead of PyPI"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build, test, and publish
+    runs-on: ubuntu-latest
+    env:
+      PYTHON_VERSION: "3.14"
+      TEST_PYPI: ${{ github.event_name == 'workflow_dispatch' && inputs.test_pypi || github.event_name != 'workflow_dispatch' && vars.RELEASE_TEST_PYPI == 'true' }}
+
+    steps:
+      - name: Check out tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Verify release tag is on main
+        run: |
+          git fetch origin main --tags
+          git merge-base --is-ancestor HEAD origin/main
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install build tooling
+        run: python -m pip install --upgrade pip build twine
+
+      - name: Build wheel
+        run: python -m build --wheel
+
+      - name: Install test dependencies and wheel
+        run: |
+          python -m pip install ".[dev]"
+          python -m pip install --force-reinstall --no-deps dist/*.whl
+
+      - name: Run tests
+        run: pytest --tb=short -q
+
+      - name: Check distribution
+        run: python -m twine check dist/*
+
+      - name: Publish to TestPyPI
+        if: env.TEST_PYPI == 'true'
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
+        run: python -m twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+
+      - name: Publish to PyPI
+        if: env.TEST_PYPI != 'true'
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: python -m twine upload dist/*
