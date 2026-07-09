@@ -17,6 +17,48 @@ _LLM_ANSWER_STYLE = (
     "margin: 0.75em 0; "
     "color: inherit"
 )
+
+_HINT_BUTTON_STYLE = """
+<style>
+.jp-OutputArea-output:has(.notebook-ta-hints),
+.jp-OutputArea-child:has(.notebook-ta-hints),
+.output_subarea:has(.notebook-ta-hints),
+.output_area:has(.notebook-ta-hints),
+.output_wrapper:has(.notebook-ta-hints),
+.cell-output:has(.notebook-ta-hints),
+.vscode-cell-output:has(.notebook-ta-hints),
+.vscode-cell-output-container:has(.notebook-ta-hints),
+.cell-output-ipywidget-background:has(.notebook-ta-hints),
+.notebook-ta-hints,
+.notebook-ta-hints.jupyter-widgets,
+.notebook-ta-hints.widget-container,
+.notebook-ta-hints .widget-box {
+    background: transparent !important;
+    background-color: transparent !important;
+}
+
+.cell-output-ipywidget-background:has(.notebook-ta-hints) {
+    --jp-widgets-color: var(--vscode-editor-foreground, inherit);
+    --jp-widgets-font-size: var(--vscode-editor-font-size, inherit);
+}
+
+.notebook-ta-hint-button,
+.notebook-ta-hint-button button,
+.notebook-ta-hints .widget-button {
+    background: var(--jp-brand-color1, #0f766e) !important;
+    color: var(--jp-ui-inverse-font-color1, #ffffff) !important;
+    border-color: var(--jp-brand-color0, #0d9488) !important;
+}
+
+.notebook-ta-hint-button:hover,
+.notebook-ta-hint-button button:hover,
+.notebook-ta-hints .widget-button:hover {
+    background: var(--jp-brand-color0, #0d9488) !important;
+}
+</style>
+""".strip()
+
+
 def format_llm_answer_markdown(answer: str) -> str:
     """Wrap an LLM answer in a visually distinct Markdown block."""
     return f'<div style="{_LLM_ANSWER_STYLE}">\n\n🤖 {answer}\n\n</div>'
@@ -64,10 +106,12 @@ def display_hints_button(
 
     button = widgets.Button(
         description="💡 Give me hints",
-        button_style="info",
         tooltip="Ask the LLM for targeted hints",
         layout=widgets.Layout(width="auto"),
     )
+    button.style.button_color = "var(--jp-brand-color1, #0f766e)"
+    button.style.text_color = "var(--jp-ui-inverse-font-color1, #ffffff)"
+    button.add_class("notebook-ta-hint-button")
 
     def _on_click(_event: object) -> None:
         button.disabled = True
@@ -79,7 +123,13 @@ def display_hints_button(
             button.description = "💡 Give me hints"
 
     button.on_click(_on_click)
-    ipydisplay.display(button)
+    container = widgets.Box(
+        [button],
+        layout=widgets.Layout(display="inline-flex", width="auto"),
+    )
+    container.add_class("notebook-ta-hints")
+    ipydisplay.display(ipydisplay.HTML(_HINT_BUTTON_STYLE))
+    ipydisplay.display(container)
 
 
 def display_no_llm_message(message: str) -> None:
