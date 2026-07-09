@@ -56,15 +56,15 @@ class NotebookTAMagic(Magics):
         _log.debug("Cell magic invoked for exercise %r", exercise_id)
         assert self.shell is not None
 
-        # 1. Execute the student's code in the user namespace
-        cast(Any, self.shell.run_cell)(cell)
-
-        # 2. Look up the exercise
+        # 1. Look up the exercise before executing any student code.
         try:
             exercise = self._registry.get(exercise_id)
         except ExerciseNotFoundError:
             display.display_unavailable_message(exercise_id)
             return
+
+        # 2. Execute the student's code in the user namespace.
+        cast(Any, self.shell.run_cell)(cell)
 
         # 3. Run unit tests
         results = self._runner.run(exercise, self.shell.user_ns)
