@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from notebook_ta.config.models import ExerciseConfig, GlobalConfig, LLMConfig, PromptConfig
 from notebook_ta.exercise.definition import Exercise
@@ -177,6 +178,46 @@ class TestLLMUnavailable:
             magic.notebook_ta("ex1", "def add(a,b): return a+b")
 
         mock_display.display_no_llm_message.assert_called_once()
+
+    @patch("notebook_ta.notebook.magic.stream_to_output", new_callable=AsyncMock)
+    @patch("notebook_ta.notebook.magic.display")
+    def test_no_llm_message_when_analysis_stream_fails(
+        self, mock_display, mock_stream
+    ) -> None:
+        ip = make_ip_stub()
+        magic = make_magic(ip=ip, llm_available=True)
+        mock_stream.side_effect = RuntimeError("stream dropped")
+        loop = asyncio.new_event_loop()
+
+        try:
+            with (
+                patch.object(magic._runner, "run", return_value=[TestResult("t", True)]),
+                patch("asyncio.get_event_loop", return_value=loop),
+            ):
+                magic.notebook_ta("ex1", "def add(a,b): return a+b")
+        finally:
+            loop.close()
+
+        mock_display.display_no_llm_message.assert_called_once_with("LLM unavailable.")
+
+    @patch("notebook_ta.notebook.magic.stream_to_output", new_callable=AsyncMock)
+    @patch("notebook_ta.notebook.magic.display")
+    def test_failed_hint_stream_is_not_saved_to_history(
+        self, mock_display, mock_stream
+    ) -> None:
+        ip = make_ip_stub()
+        magic = make_magic(ip=ip, llm_available=True)
+        mock_stream.side_effect = RuntimeError("stream dropped")
+        loop = asyncio.new_event_loop()
+
+        try:
+            with patch("asyncio.get_event_loop", return_value=loop):
+                magic._hint_callback("ex1", "student code", [TestResult("t", False)])
+        finally:
+            loop.close()
+
+        mock_display.display_no_llm_message.assert_called_once_with("LLM unavailable.")
+        assert magic._session.get_history("ex1", 3) == []
 
 
 # ---------------------------------------------------------------------------
