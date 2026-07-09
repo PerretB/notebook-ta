@@ -120,7 +120,12 @@ class NotebookTAMagic(Magics):
             return await stream_to_output(gen)
 
         loop = asyncio.get_event_loop()
-        full_response: str = loop.run_until_complete(_run())
+        try:
+            full_response: str = loop.run_until_complete(_run())
+        except Exception as exc:
+            _log.warning("LLM stream failed for exercise %r: %s", exercise_id, exc)
+            display.display_no_llm_message(exercise._global.prompts.on_no_llm)
+            return None
         return full_response
 
     def _hint_callback(
@@ -157,7 +162,12 @@ class NotebookTAMagic(Magics):
             return await stream_to_output(gen)
 
         loop = asyncio.get_event_loop()
-        full_response: str = loop.run_until_complete(_run())
+        try:
+            full_response: str = loop.run_until_complete(_run())
+        except Exception as exc:
+            _log.warning("Hint stream failed for exercise %r: %s", exercise_id, exc)
+            display.display_no_llm_message(exercise._global.prompts.on_no_llm)
+            return
 
         self._session.append_hint(
             exercise_id,
