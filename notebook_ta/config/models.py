@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -38,6 +40,8 @@ class PromptConfig(BaseModel):
 
 class TestDefinition(BaseModel):
     """Defines a single unit test for an exercise."""
+
+    __test__: ClassVar[bool] = False
 
     name: str
     code: str | None = None

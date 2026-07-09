@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+__test__ = False
+
 
 def test_multiply_basic(multiply) -> tuple[bool, str]:
     """Test basic multiplication."""

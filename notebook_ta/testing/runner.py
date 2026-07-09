@@ -12,7 +12,7 @@ import sys
 import types
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import cloudpickle  # type: ignore[import-untyped]
 
@@ -35,6 +35,8 @@ def _execute_test_callable(payload: bytes, result_queue: Any) -> None:
 @dataclass
 class TestResult:
     """Result of a single unit test execution."""
+
+    __test__: ClassVar[bool] = False
 
     name: str
     passed: bool

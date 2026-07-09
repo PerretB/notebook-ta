@@ -67,6 +67,7 @@ strict = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+testpaths = ["tests"]
 markers = [
     "nicegui_main_file(path): identify the application module for NiceGUI user-simulation tests",
 ]

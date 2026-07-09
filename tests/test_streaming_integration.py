@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from unittest.mock import MagicMock, patch
-from typing import AsyncIterator
 
-import pytest
 from IPython import display as ipydisplay
 
 from notebook_ta.config.models import ExerciseConfig, GlobalConfig, LLMConfig, PromptConfig
@@ -15,6 +14,16 @@ from notebook_ta.exercise.registry import ExerciseRegistry
 from notebook_ta.notebook.magic import NotebookTAMagic
 from notebook_ta.notebook.session import SessionState
 from notebook_ta.testing.runner import TestResult
+
+
+def run_mocked_coroutine(result: str):
+    """Return a run_until_complete mock that closes the coroutine passed by production code."""
+
+    def _run(coro):
+        coro.close()
+        return result
+
+    return MagicMock(side_effect=_run)
 
 
 class FakeLLMProvider:
@@ -92,12 +101,14 @@ class TestStreamingIntegration:
         magic.shell = ip
 
         # Mock runner to return all-pass, which triggers LLM feedback
-        with patch.object(magic._runner, "run", return_value=[TestResult("test", True)]):
-            with patch("asyncio.get_event_loop") as mock_loop:
-                loop = MagicMock()
-                loop.run_until_complete = MagicMock(return_value="This is feedback.")
-                mock_loop.return_value = loop
-                magic.notebook_ta("ex1", "def add(a, b): return a + b")
+        with (
+            patch.object(magic._runner, "run", return_value=[TestResult("test", True)]),
+            patch("asyncio.get_event_loop") as mock_loop,
+        ):
+            loop = MagicMock()
+            loop.run_until_complete = run_mocked_coroutine("This is feedback.")
+            mock_loop.return_value = loop
+            magic.notebook_ta("ex1", "def add(a, b): return a + b")
 
         # Verify display_success was called (initial "all tests passed" message)
         mock_display.display_success.assert_called_once()
