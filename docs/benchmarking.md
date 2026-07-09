@@ -2,8 +2,8 @@
 
 `notebook-ta` ships a local GUI tool that helps instructors iterate on system prompts and compare
 LLM/model combinations before rolling them out to students. It is documented in detail in
-[../spec/PromptBenchmarking.md](../spec/PromptBenchmarking.md) (functional spec) and
-[../spec/PromptBenchmarkingArchitecture.md](../spec/PromptBenchmarkingArchitecture.md)
+[the functional spec](https://github.com/PerretB/notebook-ta/blob/main/spec/PromptBenchmarking.md) and
+[the architecture spec](https://github.com/PerretB/notebook-ta/blob/main/spec/PromptBenchmarkingArchitecture.md)
 (architecture).
 
 ## Installation

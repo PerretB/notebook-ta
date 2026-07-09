@@ -5,7 +5,7 @@ Detailed architecture: [Architecture.md](Architecture.md)
 
 
 ## Agent guidelines
-- All changes must be tested with `pytest`
+- All changes implying code files must be tested with `pytest`
 - Doc strings are required on all public functions and class methods
 - Update Documentation in `docs/` for any public API changes
 - Update dependencies in `pyproject.toml` if new packages are added to the project

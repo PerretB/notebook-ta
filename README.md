@@ -267,18 +267,26 @@ See [docs/benchmarking.md](docs/benchmarking.md) for the full workflow.
 
 ## Documentation
 
+- [Read the Docs](https://notebook-ta.readthedocs.io/)
 - [Configuration reference](docs/configuration.md)
 - [Authoring exercises](docs/authoring_exercises.md)
 - [Benchmarking guide](docs/benchmarking.md)
 - [Example configuration and notebook](docs/examples)
 
+Build the documentation locally with:
+
+```bash
+python -m pip install -e ".[docs]"
+python -m sphinx -b html docs docs/_build/html
+```
+
 ## Development
 
 ```bash
-py -3.11 -m pip install -e ".[dev]"
-py -3.11 -m pytest tests/
-py -3.11 -m ruff check notebook_ta/ tests/
-py -3.11 -m mypy notebook_ta/
+python -m pip install -e ".[dev]"
+python -m pytest tests/
+python -m ruff check notebook_ta/ tests/
+python -m mypy notebook_ta/
 ```
 
 ## License
