@@ -160,6 +160,7 @@ class TestUnknownExercise:
         magic = make_magic(ip=ip)
         magic.notebook_ta("UNKNOWN_ID", "code")
         mock_display.display_unavailable_message.assert_called_once_with("UNKNOWN_ID")
+        ip.run_cell.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
