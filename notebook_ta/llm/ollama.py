@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import subprocess
 import time
-from typing import TYPE_CHECKING, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 import ollama
@@ -32,7 +33,7 @@ class OllamaProvider(LLMProvider):
         self._last_usage: TokenUsage | None = None
 
     @classmethod
-    def from_config(cls, config: "LLMConfig") -> "OllamaProvider":
+    def from_config(cls, config: LLMConfig) -> OllamaProvider:
         return cls(
             base_url=config.base_url,
             model=config.model,
@@ -92,7 +93,10 @@ class OllamaProvider(LLMProvider):
             if not self._is_localhost():
                 _log.warning("Ollama server not reachable at %r", self._base_url)
                 return False
-            print("[notebook-ta] Ollama server not running — starting and loading model, please wait…")
+            print(
+                "[notebook-ta] Ollama server not running — starting and loading model, "
+                "please wait…"
+            )
             if not self._try_start_server():
                 _log.warning("Failed to start Ollama server at %r", self._base_url)
                 return False

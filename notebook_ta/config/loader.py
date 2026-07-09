@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tomllib
 from pathlib import Path
+from typing import Any
 
 import httpx
 from pydantic import ValidationError
@@ -18,7 +19,7 @@ from notebook_ta.logging import get_logger
 _log = get_logger("config")
 
 
-def _read_toml(path: str | Path) -> dict:
+def _read_toml(path: str | Path) -> dict[str, Any]:
     """Read and parse a TOML file from a local path or https:// URL."""
     source = str(path)
     if source.startswith("https://"):
@@ -28,7 +29,9 @@ def _read_toml(path: str | Path) -> dict:
             response.raise_for_status()
             return tomllib.loads(response.text)
         except httpx.HTTPError as exc:
-            raise ConfigurationError(f"Failed to fetch remote config from {source!r}: {exc}") from exc
+            raise ConfigurationError(
+                f"Failed to fetch remote config from {source!r}: {exc}"
+            ) from exc
     else:
         local_path = Path(path)
         if not local_path.exists():
@@ -91,7 +94,8 @@ def load_exercises(path: str | Path) -> list[ExerciseConfig]:
     for exercise_id, exercise_data in exercises_raw.items():
         if not isinstance(exercise_data, dict):
             raise ConfigurationError(
-                f"Exercise {exercise_id!r} must be a TOML table, got {type(exercise_data).__name__}."
+                f"Exercise {exercise_id!r} must be a TOML table, "
+                f"got {type(exercise_data).__name__}."
             )
         exercise_data = dict(exercise_data)
         exercise_data["id"] = exercise_id

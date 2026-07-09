@@ -13,10 +13,9 @@ import contextlib
 import io
 import sys
 import time
-from collections.abc import AsyncIterator, Callable, Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import cast
 
 from notebook_ta.bench.hashing import build_input_snapshot
 from notebook_ta.bench.models import (
@@ -275,8 +274,7 @@ class BenchExecutor:
         start = time.monotonic()
         first_token_time: float | None = None
         chunks: list[str] = []
-        stream = cast(AsyncIterator[str], provider.stream(prompt))
-        async for chunk in stream:
+        async for chunk in provider.stream(prompt):
             if first_token_time is None:
                 first_token_time = time.monotonic()
             chunks.append(chunk)

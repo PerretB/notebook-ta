@@ -160,6 +160,6 @@ def detect_notebook_path(ip: InteractiveShell | None) -> Path | None:
     try:
         import ipynbname
 
-        return Path(ipynbname.path())
+        return Path(str(ipynbname.path()))
     except Exception:
         return None

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import nest_asyncio
 
@@ -109,9 +110,9 @@ def load(
 
     # 6. Register the IPython magic
     try:
-        from IPython import get_ipython
+        from IPython import get_ipython  # type: ignore[attr-defined]
 
-        ip = get_ipython()
+        ip = get_ipython()  # type: ignore[no-untyped-call]
         if ip is not None:
             load_ipython_extension(
                 ip, registry=registry, llm_provider=provider, session=session, debug=debug
@@ -140,16 +141,14 @@ def load(
 
     from IPython import display as ipydisplay
 
-    try:
-        ipydisplay.display(
-            ipydisplay.Markdown(
+    with contextlib.suppress(Exception):
+        cast(Any, ipydisplay.display)(
+            cast(Any, ipydisplay.Markdown)(
                 "✅ **notebook-ta loaded.**  "
                 f"Provider: `{cfg.llm.provider}` — Model: `{cfg.llm.model}`  \n"
                 f"{len(exercise_configs)} exercise(s) registered."
             )
         )
-    except Exception:
-        pass
 
 
 def get_registry() -> ExerciseRegistry:
@@ -194,20 +193,30 @@ def _run_setup_wizard(cfg: GlobalConfig) -> None:
 
         if model_spec is not None:
             cfg.llm.model = model_spec.name
-            ipydisplay.display(
-                ipydisplay.Markdown(
+            gpu_text = (
+                f", GPU: {profile.gpu_name} ({profile.vram_gb:.1f} GB VRAM)"
+                if profile.gpu_name
+                else ""
+            )
+            cast(Any, ipydisplay.display)(
+                cast(Any, ipydisplay.Markdown)(
                     "🔍 **Hardware detected** — auto-selecting LLM model:\n\n"
                     f"- RAM: {profile.ram_gb:.1f} GB"
-                    + (f", GPU: {profile.gpu_name} ({profile.vram_gb:.1f} GB VRAM)" if profile.gpu_name else "")
+                    + gpu_text
                     + f"\n- **Selected model:** `{model_spec.name}` — {model_spec.description}"
                 )
             )
         else:
-            ipydisplay.display(
-                ipydisplay.Markdown(
+            gpu_text = (
+                f", GPU: {profile.gpu_name} ({profile.vram_gb:.1f} GB VRAM)"
+                if profile.gpu_name
+                else ""
+            )
+            cast(Any, ipydisplay.display)(
+                cast(Any, ipydisplay.Markdown)(
                     "⚠️ **Hardware auto-detection:** No suitable model found for your hardware.\n\n"
                     f"- RAM: {profile.ram_gb:.1f} GB"
-                    + (f", GPU: {profile.gpu_name} ({profile.vram_gb:.1f} GB VRAM)" if profile.gpu_name else "")
+                    + gpu_text
                     + "\n\nThe LLM provider will be marked as unavailable. "
                     "Please configure a model manually in your `global_config.toml`."
                 )
