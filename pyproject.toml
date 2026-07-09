@@ -48,6 +48,12 @@ dev = [
     "mypy>=1.10",
 ]
 
+[project.urls]
+"Homepage" = "https://github.com/PerretB/notebook-ta"
+"Documentation" = "https://github.com/PerretB/notebook-ta"
+"Repository" = "https://github.com/PerretB/notebook-ta.git"
+"Issues" = "https://github.com/PerretB/notebook-ta/issues"
+
 [project.scripts]
 notebook-ta = "notebook_ta.bench.cli:cli"
 
