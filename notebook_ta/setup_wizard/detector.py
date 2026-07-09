@@ -23,7 +23,7 @@ def _detect_ram() -> float:
     try:
         import psutil  # type: ignore[import-untyped]
 
-        return psutil.virtual_memory().total / 1e9
+        return float(psutil.virtual_memory().total / 1e9)
     except Exception:
         return 0.0
 

@@ -14,7 +14,7 @@ from notebook_ta.bench.ui.tag_badges import render_tag_badge
 from notebook_ta.config.models import ExerciseConfig, GlobalConfig, PromptConfig
 from notebook_ta.exercise.definition import Exercise
 from notebook_ta.notebook._ansi import ansi_to_html
-from notebook_ta.testing.runner import TestRunner
+from notebook_ta.testing.runner import TestResult, TestRunner
 
 
 def build(
@@ -316,7 +316,7 @@ def _run_solution_tests(
 ) -> None:
     """Exec the solution and run its unit tests, rendering results into `results`."""
     error: str | None = None
-    test_results = []
+    test_results: list[TestResult] = []
     try:
         namespace: dict[str, object] = {}
         with extended_sys_path(state.project.settings.python_path_dirs):
@@ -327,13 +327,15 @@ def _run_solution_tests(
             )
             exercise = Exercise(exercise_config, global_config)
             test_names = [test_def.name for test_def in exercise.tests]
-            test_results = run_setup_code(
+            setup_results = run_setup_code(
                 state.project.setup_code_for(exercise_config.id),
                 namespace,
                 test_names,
             )
-            if test_results is None:
+            if setup_results is None:
                 test_results = TestRunner().run(exercise, namespace)
+            else:
+                test_results = setup_results
     except Exception as exc:  # pragma: no cover - defensive UI feedback
         error = str(exc)
 

@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import html
 from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, cast
 
 from IPython import display as ipydisplay
 
 from notebook_ta.notebook._ansi import ansi_to_html
+
+if TYPE_CHECKING:
+    from notebook_ta.testing.runner import TestResult
 
 _LLM_ANSWER_STYLE = (
     "background: rgba(20, 184, 166, 0.14); "
@@ -66,10 +70,12 @@ def format_llm_answer_markdown(answer: str) -> str:
 
 def display_success() -> None:
     """Show a 'tests passed' indicator before streaming begins."""
-    ipydisplay.display(ipydisplay.Markdown("✅ **All tests passed!** Generating analysis…"))
+    cast(Any, ipydisplay.display)(
+        cast(Any, ipydisplay.Markdown)("✅ **All tests passed!** Generating analysis…")
+    )
 
 
-def display_test_results(results: list) -> None:
+def display_test_results(results: list[TestResult]) -> None:
     """Render a formatted list of test results.
 
     Args:
@@ -89,7 +95,7 @@ def display_test_results(results: list) -> None:
             f"<strong>{html.escape(str(result.name))}</strong>{message}</div>"
         )
     content = '<h3 style="margin-bottom: 0.4em">Test Results</h3>' + "".join(result_blocks)
-    ipydisplay.display(ipydisplay.HTML(content))
+    cast(Any, ipydisplay.display)(cast(Any, ipydisplay.HTML)(content))
 
 
 def display_hints_button(
@@ -128,8 +134,8 @@ def display_hints_button(
         layout=widgets.Layout(display="inline-flex", width="auto"),
     )
     container.add_class("notebook-ta-hints")
-    ipydisplay.display(ipydisplay.HTML(_HINT_BUTTON_STYLE))
-    ipydisplay.display(container)
+    cast(Any, ipydisplay.display)(cast(Any, ipydisplay.HTML)(_HINT_BUTTON_STYLE))
+    cast(Any, ipydisplay.display)(container)
 
 
 def display_no_llm_message(message: str) -> None:
@@ -138,7 +144,9 @@ def display_no_llm_message(message: str) -> None:
     Args:
         message: The ``prompts.on_no_llm`` string from the global config.
     """
-    ipydisplay.display(ipydisplay.Markdown(f"⚠️ **LLM unavailable**\n\n{message}"))
+    cast(Any, ipydisplay.display)(
+        cast(Any, ipydisplay.Markdown)(f"⚠️ **LLM unavailable**\n\n{message}")
+    )
 
 
 def display_unavailable_message(exercise_id: str) -> None:
@@ -147,8 +155,8 @@ def display_unavailable_message(exercise_id: str) -> None:
     Args:
         exercise_id: The unrecognised exercise identifier.
     """
-    ipydisplay.display(
-        ipydisplay.Markdown(
+    cast(Any, ipydisplay.display)(
+        cast(Any, ipydisplay.Markdown)(
             f"⚠️ **Exercise `{exercise_id}` not found.**\n\n"
             "Please check the exercise ID in the magic line and ensure "
             "`notebook_ta.load()` has been called with the correct exercises file."
@@ -178,4 +186,4 @@ def display_debug_prompt(prompt: str, call_type: str = "analysis") -> None:
     accordion = widgets.Accordion(children=[textarea])
     accordion.set_title(0, f"🐛 Debug – LLM Prompt ({call_type})")
     accordion.selected_index = None  # start closed
-    ipydisplay.display(accordion)
+    cast(Any, ipydisplay.display)(accordion)

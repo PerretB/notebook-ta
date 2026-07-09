@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any, cast
 
 from IPython import display as ipydisplay
 
@@ -25,8 +26,8 @@ async def stream_to_output(async_gen: AsyncIterator[str]) -> str:
         The full concatenated response string.
     """
     accumulated: list[str] = []
-    handle = ipydisplay.display(
-        ipydisplay.Markdown(format_llm_answer_markdown("")),
+    handle = cast(Any, ipydisplay.display)(
+        cast(Any, ipydisplay.Markdown)(format_llm_answer_markdown("")),
         display_id=True,
     )
 
@@ -34,6 +35,8 @@ async def stream_to_output(async_gen: AsyncIterator[str]) -> str:
         accumulated.append(chunk)
         full_text = "".join(accumulated)
         if handle is not None:
-            handle.update(ipydisplay.Markdown(format_llm_answer_markdown(full_text)))
+            handle.update(
+                cast(Any, ipydisplay.Markdown)(format_llm_answer_markdown(full_text))
+            )
 
     return "".join(accumulated)

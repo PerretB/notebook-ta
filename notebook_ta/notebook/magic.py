@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from IPython.core.magic import Magics, cell_magic, magics_class
 
@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from IPython.core.interactiveshell import InteractiveShell
 
     from notebook_ta.llm.base import LLMProvider
+    from notebook_ta.testing.runner import TestResult
 
 _log = get_logger("magic")
 
@@ -28,9 +29,9 @@ class NotebookTAMagic(Magics):
 
     def __init__(
         self,
-        shell: "InteractiveShell",
+        shell: InteractiveShell | None,
         registry: ExerciseRegistry,
-        llm_provider: "LLMProvider",
+        llm_provider: LLMProvider,
         session: SessionState,
         *,
         debug: bool = False,
@@ -42,7 +43,7 @@ class NotebookTAMagic(Magics):
         self._runner = TestRunner()
         self._debug = debug
 
-    @cell_magic  # type: ignore[misc]
+    @cell_magic
     def notebook_ta(self, line: str, cell: str) -> None:
         """Cell magic: run unit tests and stream LLM feedback.
 
@@ -53,9 +54,10 @@ class NotebookTAMagic(Magics):
         """
         exercise_id = line.strip()
         _log.debug("Cell magic invoked for exercise %r", exercise_id)
+        assert self.shell is not None
 
         # 1. Execute the student's code in the user namespace
-        self.shell.run_cell(cell)
+        cast(Any, self.shell.run_cell)(cell)
 
         # 2. Look up the exercise
         try:
@@ -88,16 +90,16 @@ class NotebookTAMagic(Magics):
         self,
         exercise_id: str,
         student_code: str,
-        results: list,
-        hint_history: list | None,
-    ) -> None:
+        results: list[TestResult],
+        hint_history: list[HintExchange] | None,
+    ) -> str | None:
         """Build a prompt and stream the LLM response, handling unavailability."""
         if not self._llm.is_available():
             exercise = self._registry.get(exercise_id)
             display.display_no_llm_message(
-                exercise._global.prompts.on_no_llm  # type: ignore[attr-defined]
+                exercise._global.prompts.on_no_llm
             )
-            return
+            return None
 
         exercise = self._registry.get(exercise_id)
         prompt = exercise.build_prompt(
@@ -125,7 +127,7 @@ class NotebookTAMagic(Magics):
         self,
         exercise_id: str,
         student_code: str,
-        test_results: list,
+        test_results: list[TestResult],
     ) -> None:
         """Handle a hint button click: build hint prompt, stream, and save to history."""
         exercise = self._registry.get(exercise_id)
@@ -164,9 +166,9 @@ class NotebookTAMagic(Magics):
 
 
 def load_ipython_extension(
-    ip: "InteractiveShell",
+    ip: InteractiveShell,
     registry: ExerciseRegistry,
-    llm_provider: "LLMProvider",
+    llm_provider: LLMProvider,
     session: SessionState,
     *,
     debug: bool = False,

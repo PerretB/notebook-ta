@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, AsyncIterator
+from typing import TYPE_CHECKING
 
 from notebook_ta.logging import get_logger
 
@@ -31,7 +32,7 @@ class LLMProvider(ABC):
         ...
 
     @abstractmethod
-    async def stream(self, prompt: str) -> AsyncIterator[str]:
+    def stream(self, prompt: str) -> AsyncIterator[str]:
         """Send a prompt and yield response chunks as they arrive."""
         ...
 
@@ -42,7 +43,7 @@ class LLMProvider(ABC):
 
     @classmethod
     @abstractmethod
-    def from_config(cls, config: "LLMConfig") -> "LLMProvider":
+    def from_config(cls, config: LLMConfig) -> LLMProvider:
         """Construct an instance from a LLMConfig."""
         ...
 
@@ -55,7 +56,7 @@ class LLMProvider(ABC):
         return None
 
 
-def create_provider(config: "LLMConfig") -> LLMProvider:
+def create_provider(config: LLMConfig) -> LLMProvider:
     """Factory: instantiate the correct LLMProvider based on config.provider.
 
     Args:

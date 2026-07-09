@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING, Any
 
 from notebook_ta.llm.base import LLMProvider, TokenUsage
 from notebook_ta.logging import get_logger
@@ -27,7 +28,7 @@ class OpenAICompatProvider(LLMProvider):
         self._last_usage: TokenUsage | None = None
 
     @classmethod
-    def from_config(cls, config: "LLMConfig") -> "OpenAICompatProvider":
+    def from_config(cls, config: LLMConfig) -> OpenAICompatProvider:
         return cls(
             base_url=config.base_url,
             api_key=config.api_key,
@@ -36,7 +37,7 @@ class OpenAICompatProvider(LLMProvider):
             temperature=config.temperature,
         )
 
-    def _get_client(self):  # type: ignore[no-untyped-def]
+    def _get_client(self) -> Any:
         from openai import AsyncOpenAI
 
         return AsyncOpenAI(

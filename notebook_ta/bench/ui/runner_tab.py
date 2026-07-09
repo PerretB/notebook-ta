@@ -5,7 +5,7 @@ from __future__ import annotations
 from nicegui import ui
 
 from notebook_ta.bench.executor import BenchJob
-from notebook_ta.bench.models import ModelUnderTest
+from notebook_ta.bench.models import ExecutionRecord, ModelUnderTest
 from notebook_ta.bench.state import BenchAppState
 from notebook_ta.bench.ui._helpers import tracked_on_change
 from notebook_ta.config.models import LLMConfig
@@ -112,8 +112,9 @@ def build(state: BenchAppState) -> None:
             with models_container:
                 for model in project.models_under_test:
 
-                    def _on_toggle(event, lbl=model.label) -> None:
-                        _toggle_model(lbl, event.value)
+                    def _on_toggle(event: object, lbl: str = model.label) -> None:
+                        selected = bool(getattr(event, "value", False))
+                        _toggle_model(lbl, selected)
 
                     with ui.row().classes("items-center gap-2"):
                         ui.checkbox(
@@ -122,7 +123,7 @@ def build(state: BenchAppState) -> None:
                             on_change=_on_toggle,
                         )
 
-                        def _remove(lbl=model.label) -> None:
+                        def _remove(lbl: str = model.label) -> None:
                             state.remove_model(lbl)
                             _refresh_models()
 
@@ -184,7 +185,12 @@ def build(state: BenchAppState) -> None:
         total_jobs = 0
         ui_detached = False
 
-        def _on_progress(job: BenchJob, status: str, message, record) -> None:
+        def _on_progress(
+            job: BenchJob,
+            status: str,
+            message: str | None,
+            record: ExecutionRecord | None,
+        ) -> None:
             nonlocal ui_detached
             progress_rows[_job_key(job)] = _progress_row(job, status, message)
             if ui_detached:
