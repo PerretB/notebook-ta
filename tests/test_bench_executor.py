@@ -187,6 +187,33 @@ class TestBenchExecutorSequential:
         assert records[1].status == "completed"
 
     @pytest.mark.asyncio
+    async def test_solution_execution_timeout_is_reported_as_failed_test(self) -> None:
+        config = make_exercise()
+        solution = make_solution(
+            code="""\
+while True:
+    pass
+"""
+        )
+        job = BenchJob(config, solution, make_model("m1"), make_prompt_version())
+        provider = FakeProvider(["ok"])
+
+        run = BenchmarkRun(prompt_version_id="V1", model_labels=["m1"], job_count=1)
+        executor = BenchExecutor(unit_test_timeout=lambda: 0.2)
+        records = []
+
+        def on_progress(job, status, message, record) -> None:
+            if record is not None:
+                records.append(record)
+
+        with patch("notebook_ta.bench.executor.create_provider", return_value=provider):
+            await executor.run([job], run, on_progress)
+
+        assert records[0].status == "completed"
+        assert records[0].test_results[0].passed is False
+        assert "timed out after 0.2 seconds" in (records[0].test_results[0].message or "")
+
+    @pytest.mark.asyncio
     async def test_metrics_use_word_count_fallback_without_usage(self) -> None:
         config = make_exercise()
         job = BenchJob(config, make_solution(), make_model("m1"), make_prompt_version())

@@ -11,11 +11,16 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import io
+import multiprocessing
+import queue
 import sys
 import time
+import types
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+
+import cloudpickle  # type: ignore[import-untyped]
 
 from notebook_ta.bench.hashing import build_input_snapshot
 from notebook_ta.bench.models import (
@@ -51,6 +56,35 @@ class BenchJob:
 # Called as on_progress(job, status, message, record). `record` is populated only
 # when the job has just finished (status in {"completed", "failed"}).
 ProgressCallback = Callable[[BenchJob, str, "str | None", "ExecutionRecord | None"], None]
+
+
+@dataclass
+class _BenchmarkTestRunResult:
+    """Structured result returned by the benchmark test worker process."""
+
+    test_results: list[TestResult] | None = None
+    error: str | None = None
+
+
+def _execute_solution_tests(payload: bytes, result_queue: object) -> None:
+    """Run solution/setup/test code in a worker process and return a serialized result."""
+    exercise_config, global_config, solution_code, setup_code, python_path_dirs = (
+        cloudpickle.loads(payload)
+    )
+    exercise = Exercise(exercise_config, global_config)
+    try:
+        namespace: dict[str, object] = {}
+        with extended_sys_path(python_path_dirs):
+            exec(solution_code, namespace)  # noqa: S102 -- isolated benchmark worker
+            test_names = [test_def.name for test_def in exercise.tests]
+            test_results = run_setup_code(setup_code, namespace, test_names)
+            if test_results is None:
+                test_results = TestRunner().run(exercise, namespace)
+        result = _BenchmarkTestRunResult(test_results=test_results)
+    except Exception as exc:
+        result = _BenchmarkTestRunResult(error=str(exc))
+    cast_queue = result_queue
+    cast_queue.put(cloudpickle.dumps(result))  # type: ignore[attr-defined]
 
 
 @contextmanager
@@ -131,6 +165,61 @@ def run_setup_code(
             for name in test_names
         ]
     return None
+
+
+def run_solution_tests_with_timeout(
+    exercise: Exercise,
+    solution_code: str,
+    setup_code: str,
+    python_path_dirs: list[str],
+    timeout: float,
+) -> _BenchmarkTestRunResult:
+    """Execute benchmark solution, setup, and tests in a child process with a timeout."""
+    try:
+        payload = cloudpickle.dumps(
+            (exercise.config, exercise._global, solution_code, setup_code, python_path_dirs)
+        )
+    except Exception as exc:
+        return _BenchmarkTestRunResult(
+            error=f"Could not prepare benchmark test execution: {exc}"
+        )
+
+    ctx = multiprocessing.get_context("spawn")
+    result_queue: object = ctx.Queue()
+    process = ctx.Process(target=_execute_solution_tests, args=(payload, result_queue))
+    sys.modules.setdefault("__main__", types.ModuleType("__main__"))
+    process.start()
+    process.join(timeout)
+
+    if process.is_alive():
+        process.terminate()
+        process.join()
+        result_queue.close()  # type: ignore[attr-defined]
+        test_names = [test_def.name for test_def in exercise.tests] or ["Benchmark execution"]
+        return _BenchmarkTestRunResult(
+            test_results=[
+                TestResult(
+                    name=name,
+                    passed=False,
+                    message=(
+                        f"Benchmark solution/test execution timed out after {timeout:g} "
+                        "seconds and was cancelled."
+                    ),
+                )
+                for name in test_names
+            ]
+        )
+
+    try:
+        result_payload = result_queue.get_nowait()  # type: ignore[attr-defined]
+    except queue.Empty:
+        return _BenchmarkTestRunResult(
+            error="Benchmark test worker exited without returning a result."
+        )
+    finally:
+        result_queue.close()  # type: ignore[attr-defined]
+
+    return cloudpickle.loads(result_payload)
 
 
 class BenchExecutor:
@@ -219,13 +308,17 @@ class BenchExecutor:
         exercise = Exercise(job.exercise_config, global_config)
 
         try:
-            namespace: dict[str, object] = {}
-            with extended_sys_path(self._get_python_path_dirs()):
-                exec(job.solution.code, namespace)  # noqa: S102 -- isolated authoring-time sandbox
-                test_names = [test_def.name for test_def in exercise.tests]
-                test_results = run_setup_code(job.setup_code, namespace, test_names)
-                if test_results is None:
-                    test_results = TestRunner().run(exercise, namespace)
+            worker_result = run_solution_tests_with_timeout(
+                exercise=exercise,
+                solution_code=job.solution.code,
+                setup_code=job.setup_code,
+                python_path_dirs=self._get_python_path_dirs(),
+                timeout=exercise.unit_test_timeout,
+            )
+            if worker_result.error is not None:
+                raise RuntimeError(worker_result.error)
+            assert worker_result.test_results is not None
+            test_results = worker_result.test_results
             prompt = exercise.build_prompt(job.solution.code, test_results, hint_history=None)
 
             provider = self._get_provider(job.model)
