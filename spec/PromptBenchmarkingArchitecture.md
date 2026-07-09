@@ -51,7 +51,7 @@ These decisions were clarified with the project owner and drive the rest of this
 | `testing.runner.TestRunner` / `TestResult` | ✅ | Runs unit tests against a namespace built by `exec()`-ing the student solution text (see §9.3), instead of an IPython kernel namespace. |
 | `notebook.streaming` / `notebook.display` | ❌ Not reused | Those modules are `ipywidgets`/`IPython.display` specific. The bench tool renders streaming output into NiceGUI elements instead (new code, see §11). |
 | `logging.get_logger()` | ✅ | Bench modules log under `notebook_ta.bench.*`. |
-| `cli.scaffold.cli` (click group) | ✅ | The `bench` command is registered onto the existing group rather than creating a second entry point. |
+| `bench.cli.cli` (click group) | ✅ | The `notebook-ta` entry point registers only the `bench` command. |
 
 ---
 
@@ -63,7 +63,7 @@ notebook_ta/
 │   └── base.py                 # + TokenUsage dataclass, get_last_usage() hook (additive)
 └── bench/
     ├── __init__.py
-    ├── cli.py                  # `bench` click command (registered into cli.scaffold.cli)
+    ├── cli.py                  # `notebook-ta` click group with the `bench` command
     ├── app.py                  # NiceGUI bootstrap: create_app(), main()
     ├── catalog.py              # Style-preserving local TOML exercise authoring
     ├── state.py                 # BenchAppState singleton (in-memory, per-process)
@@ -650,6 +650,11 @@ Both benchmark job output and internal-model generation reuse a small shared hel
 ## 12. CLI Integration (`bench/cli.py`)
 
 ```python
+@click.group()
+def cli() -> None:
+    """notebook-ta command line interface."""
+
+
 @click.command("bench")
 @click.argument("project_file", required=False, type=click.Path(dir_okay=False))
 def bench(project_file: str | None) -> None:
@@ -661,17 +666,19 @@ def bench(project_file: str | None) -> None:
             "The benchmarking UI requires the 'bench' extra: pip install 'notebook-ta[bench]'"
         ) from exc
     main(project_file)
-```
 
-Registered in `cli/scaffold.py`:
 
-```python
-from notebook_ta.bench.cli import bench
 cli.add_command(bench)
 ```
 
-This mirrors the existing lazy-import pattern already used by `notebook-ta setup` for its optional
-`rich`/`psutil` dependencies, keeping the base `notebook-ta` install lightweight.
+Installed directly as the `notebook-ta` entry point via `pyproject.toml`:
+
+```toml
+[project.scripts]
+notebook-ta = "notebook_ta.bench.cli:cli"
+```
+
+The benchmarking application import remains lazy so CLI help can render without importing NiceGUI.
 
 ---
 

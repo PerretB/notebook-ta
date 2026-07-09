@@ -53,9 +53,9 @@ notebook_ta/
 │   ├── __init__.py
 │   └── detector.py           # Hardware detection + model auto-selection
 ├── logging.py                # Logging utilities: get_logger, NotebookHandler, setup_logging
-└── cli/
+└── bench/
     ├── __init__.py
-    └── scaffold.py           # notebook-ta CLI
+    └── cli.py                # notebook-ta CLI with the bench command
 ```
 
 Supporting files at the project root:
@@ -68,7 +68,7 @@ tests/
 ├── test_llm.py
 ├── test_magic.py
 ├── test_logging.py
-└── test_scaffold.py
+└── test_bench_cli.py
 docs/
 ├── examples/
 │   ├── global_config.toml
@@ -470,38 +470,22 @@ When `config.llm.model == "auto"`:
    (selected model name + description) is displayed in the notebook cell output
 4. If no model fits, a warning is displayed and the provider will report `is_available() == False`
 
-The `notebook-ta setup` CLI command runs the same detection and prints a formatted recommendation
-table using `rich`, for use outside of a notebook (e.g., initial machine setup instructions).
+Hardware detection is used by `notebook_ta.load()` only; there is no standalone setup CLI command.
 
 ---
 
-## 9. CLI Scaffold Generator (`cli/scaffold.py`)
+## 9. CLI (`bench/cli.py`)
 
-Installed as the `notebook-ta` entry point via `pyproject.toml`.
-
-### `notebook-ta create-notebook`
+Installed as the `notebook-ta` entry point via `pyproject.toml`. The Click group intentionally
+registers only one command:
 
 ```
-notebook-ta create-notebook EXERCISES_TOML [OPTIONS]
-
-Options:
-  --global-config PATH   Path to global config TOML (written into the setup cell)
-  --output PATH          Output .ipynb file path  [default: notebook.ipynb]
+notebook-ta bench [PROJECT_FILE]
 ```
 
-**Generated notebook structure** (built with `nbformat`):
-
-1. **Setup cell** (code) — `import notebook_ta` followed by `notebook_ta.load(...)` with the
-   provided config paths
-2. For each exercise in `EXERCISES_TOML`:
-   - **Markdown cell** — exercise statement rendered as a Markdown heading and paragraph
-   - **Code cell** — `%%notebook_ta <exercise_id>` as the first line, followed by a
-     `# Write your solution here` placeholder comment
-
-### `notebook-ta setup`
-
-Runs hardware detection and prints a model recommendation table using `rich`. Intended for
-instructor setup guides and student onboarding documentation.
+The command launches the prompt/model benchmarking GUI, optionally offering `PROJECT_FILE` on the
+welcome screen. The NiceGUI application import is lazy so basic CLI help does not require loading
+the benchmarking UI stack.
 
 ---
 
@@ -708,10 +692,9 @@ sequenceDiagram
 | `ipywidgets`  | Interactive hints button and streaming output widget             | Yes                  |
 | `openai`      | OpenAI-compatible LLM provider                                   | Yes                  |
 | `click`       | CLI command framework                                            | Yes                  |
-| `nbformat`    | Notebook `.ipynb` scaffold generation                            | Yes                  |
+| `nbformat`    | Notebook `.ipynb` parsing for notebook source extraction          | Yes                  |
 | `nest_asyncio`| Allow `asyncio` event loop nesting in Jupyter environments       | Yes                  |
 | `psutil`      | RAM detection for the setup wizard                               | Optional             |
-| `rich`        | Formatted CLI output for `notebook-ta setup`                     | Optional             |
 
 `tomllib` is part of the Python 3.11+ standard library and requires no extra installation.
 
@@ -749,9 +732,9 @@ notebook-ta/
 │   │   ├── __init__.py
 │   │   └── detector.py
 │   ├── logging.py
-│   └── cli/
+│   └── bench/
 │       ├── __init__.py
-│       └── scaffold.py
+│       └── cli.py
 ├── tests/
 │   ├── __init__.py
 │   ├── test_config.py
@@ -760,7 +743,7 @@ notebook-ta/
 │   ├── test_llm.py
 │   ├── test_magic.py
 │   ├── test_logging.py
-│   └── test_scaffold.py
+│   └── test_bench_cli.py
 ├── docs/
 │   ├── examples/
 │   │   ├── global_config.toml
@@ -791,7 +774,7 @@ All tests use `pytest`. The `tests/` directory mirrors the package structure.
 | `test_llm.py`      | Mocked HTTP responses for Ollama and OpenAI-compat, streaming chunk assembly, `is_available()` fallback |
 | `test_magic.py`    | Magic registration, full execution flow with mocked LLM and test runner, hint history accumulation and deque truncation, `debug=True` prompt display |
 | `test_logging.py`  | `setup_logging()` idempotency, handler types and levels, `NotebookHandler.emit()` with mocked `IPython.display` |
-| `test_scaffold.py` | CLI command invocation, generated notebook structure, cell content and ordering |
+| `test_bench_cli.py` | CLI command invocation and friendly optional-dependency errors |
 
 **Mocking strategy**: `httpx` calls are mocked using `pytest-httpx`. IPython is mocked using a
 minimal stub exposing `user_ns` and `run_cell`. `ipywidgets` display calls are intercepted by

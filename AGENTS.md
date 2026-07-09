@@ -82,7 +82,7 @@ CI runs on Python 3.11 and 3.12 across Ubuntu, macOS, and Windows — see
 - `SessionState` is owned by the `NotebookTAMagic` instance and lives for the kernel session lifetime.
 
 ### CLI
-- CLI commands are defined with `click` in `cli/scaffold.py`.
+- CLI commands are defined with `click` in `bench/cli.py`.
 - The entry point is `notebook-ta` (see `pyproject.toml`).
 
 ### Testing

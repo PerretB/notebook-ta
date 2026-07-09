@@ -11,12 +11,6 @@ feedback directly in the notebook output.
 pip install notebook-ta
 ```
 
-For local LLM setup support (hardware detection and rich CLI output):
-
-```bash
-pip install "notebook-ta[wizard]"
-```
-
 For the prompt/model benchmarking GUI (instructor-facing, see below):
 
 ```bash
@@ -74,19 +68,7 @@ def add(a, b):
     return a + b
 ```
 
-### 3. Scaffold a notebook from exercises
-
-```bash
-notebook-ta create-notebook exercises.toml --global-config global_config.toml --output notebook.ipynb
-```
-
-### 4. Check hardware for local LLM
-
-```bash
-notebook-ta setup
-```
-
-### 5. Benchmark prompts and models
+### 3. Benchmark prompts and models
 
 ```bash
 notebook-ta bench

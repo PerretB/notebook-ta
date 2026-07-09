@@ -5,6 +5,11 @@ from __future__ import annotations
 import click
 
 
+@click.group()
+def cli() -> None:
+    """notebook-ta command line interface."""
+
+
 @click.command("bench")
 @click.argument("project_file", required=False, type=click.Path(dir_okay=False))
 def bench(project_file: str | None) -> None:
@@ -16,3 +21,6 @@ def bench(project_file: str | None) -> None:
             "The benchmarking UI requires the 'bench' extra: pip install 'notebook-ta[bench]'"
         ) from exc
     main(project_file)
+
+
+cli.add_command(bench)

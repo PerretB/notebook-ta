@@ -49,7 +49,7 @@ dev = [
 ]
 
 [project.scripts]
-notebook-ta = "notebook_ta.cli.scaffold:cli"
+notebook-ta = "notebook_ta.bench.cli:cli"
 
 [tool.hatch.build.targets.wheel]
 packages = ["notebook_ta"]
