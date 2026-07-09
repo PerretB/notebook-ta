@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from notebook_ta.config.models import ExerciseConfig, GlobalConfig, LLMConfig, PromptConfig
 from notebook_ta.exercise.definition import Exercise
@@ -12,7 +10,6 @@ from notebook_ta.exercise.registry import ExerciseRegistry
 from notebook_ta.notebook.magic import NotebookTAMagic, load_ipython_extension
 from notebook_ta.notebook.session import SessionState
 from notebook_ta.testing.runner import TestResult
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -69,6 +66,16 @@ def make_magic(
     return magic
 
 
+def run_mocked_coroutine(result: str):
+    """Return a run_until_complete mock that closes the coroutine passed by production code."""
+
+    def _run(coro):
+        coro.close()
+        return result
+
+    return MagicMock(side_effect=_run)
+
+
 # ---------------------------------------------------------------------------
 # Magic registration
 # ---------------------------------------------------------------------------
@@ -96,12 +103,14 @@ class TestCellMagicAllPass:
         magic = make_magic(ip=ip)
 
         # Patch runner to return all-pass
-        with patch.object(magic._runner, "run", return_value=[TestResult("t", True)]):
-            with patch("asyncio.get_event_loop") as mock_loop:
-                loop = MagicMock()
-                loop.run_until_complete = MagicMock(return_value="feedback")
-                mock_loop.return_value = loop
-                magic.notebook_ta("ex1", "def add(a,b): return a+b")
+        with (
+            patch.object(magic._runner, "run", return_value=[TestResult("t", True)]),
+            patch("asyncio.get_event_loop") as mock_loop,
+        ):
+            loop = MagicMock()
+            loop.run_until_complete = run_mocked_coroutine("feedback")
+            mock_loop.return_value = loop
+            magic.notebook_ta("ex1", "def add(a,b): return a+b")
 
         mock_display.display_success.assert_called_once()
 
@@ -110,12 +119,14 @@ class TestCellMagicAllPass:
         ip = make_ip_stub()
         magic = make_magic(ip=ip)
 
-        with patch.object(magic._runner, "run", return_value=[TestResult("t", True)]):
-            with patch("asyncio.get_event_loop") as mock_loop:
-                loop = MagicMock()
-                loop.run_until_complete = MagicMock(return_value="feedback")
-                mock_loop.return_value = loop
-                magic.notebook_ta("ex1", "x = 42")
+        with (
+            patch.object(magic._runner, "run", return_value=[TestResult("t", True)]),
+            patch("asyncio.get_event_loop") as mock_loop,
+        ):
+            loop = MagicMock()
+            loop.run_until_complete = run_mocked_coroutine("feedback")
+            mock_loop.return_value = loop
+            magic.notebook_ta("ex1", "x = 42")
 
         ip.run_cell.assert_called_once_with("x = 42")
 
@@ -184,7 +195,7 @@ class TestHintHistory:
 
         with patch("asyncio.get_event_loop") as mock_loop:
             loop = MagicMock()
-            loop.run_until_complete = MagicMock(return_value="Hint response")
+            loop.run_until_complete = run_mocked_coroutine("Hint response")
             mock_loop.return_value = loop
             magic._hint_callback("ex1", "student code", failing_results)
 
@@ -240,12 +251,14 @@ class TestDebugMode:
         ip = make_ip_stub()
         magic = self._make_debug_magic(ip=ip)
 
-        with patch.object(magic._runner, "run", return_value=[TestResult("t", True)]):
-            with patch("asyncio.get_event_loop") as mock_loop:
-                loop = MagicMock()
-                loop.run_until_complete = MagicMock(return_value="feedback")
-                mock_loop.return_value = loop
-                magic.notebook_ta("ex1", "def add(a,b): return a+b")
+        with (
+            patch.object(magic._runner, "run", return_value=[TestResult("t", True)]),
+            patch("asyncio.get_event_loop") as mock_loop,
+        ):
+            loop = MagicMock()
+            loop.run_until_complete = run_mocked_coroutine("feedback")
+            mock_loop.return_value = loop
+            magic.notebook_ta("ex1", "def add(a,b): return a+b")
 
         mock_display.display_debug_prompt.assert_called_once()
         call_kwargs = mock_display.display_debug_prompt.call_args
@@ -258,12 +271,14 @@ class TestDebugMode:
         ip = make_ip_stub()
         magic = make_magic(ip=ip)  # debug defaults to False
 
-        with patch.object(magic._runner, "run", return_value=[TestResult("t", True)]):
-            with patch("asyncio.get_event_loop") as mock_loop:
-                loop = MagicMock()
-                loop.run_until_complete = MagicMock(return_value="feedback")
-                mock_loop.return_value = loop
-                magic.notebook_ta("ex1", "def add(a,b): return a+b")
+        with (
+            patch.object(magic._runner, "run", return_value=[TestResult("t", True)]),
+            patch("asyncio.get_event_loop") as mock_loop,
+        ):
+            loop = MagicMock()
+            loop.run_until_complete = run_mocked_coroutine("feedback")
+            mock_loop.return_value = loop
+            magic.notebook_ta("ex1", "def add(a,b): return a+b")
 
         mock_display.display_debug_prompt.assert_not_called()
 
@@ -275,7 +290,7 @@ class TestDebugMode:
 
         with patch("asyncio.get_event_loop") as mock_loop:
             loop = MagicMock()
-            loop.run_until_complete = MagicMock(return_value="Hint response")
+            loop.run_until_complete = run_mocked_coroutine("Hint response")
             mock_loop.return_value = loop
             magic._hint_callback("ex1", "student code", failing_results)
 
