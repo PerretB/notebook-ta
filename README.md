@@ -1,5 +1,9 @@
 # notebook-ta
 
+[![Documentation Status](https://readthedocs.org/projects/notebook-ta/badge/?version=stable)](https://notebook-ta.readthedocs.io/en/stable/?badge=stable)
+[![Actions Status](https://github.com/perretb/notebook-ta/workflows/CI/badge.svg)](https://github.com/perretb/notebook-ta/actions)
+[![Actions Status](https://github.com/perretb/notebook-ta/workflows/Release/badge.svg)](https://github.com/perretb/notebook-ta/actions)
+
 `notebook-ta` adds an LLM-powered teaching assistant to Jupyter notebooks for
 Python programming courses. Students write answers in ordinary notebook cells
 tagged with the `%%notebook_ta` magic; the package runs instructor-defined unit
@@ -34,6 +38,11 @@ The import name is `notebook_ta`; the package/CLI name is `notebook-ta`.
   and GPU VRAM.
 - Use the benchmark GUI to compare prompts, models, student solutions, test
   outcomes, and generation metrics before publishing material to students.
+
+
+## Documentation
+
+The documentation is hosted on [Read the Docs](https://notebook-ta.readthedocs.io/). 
 
 ## Quick Start
 
