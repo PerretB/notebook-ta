@@ -14,6 +14,7 @@ from notebook_ta.config.models import (
     ExerciseConfig,
     GlobalConfig,
 )
+from notebook_ta.i18n import resolve_language
 from notebook_ta.logging import get_logger
 
 _log = get_logger("config")
@@ -64,6 +65,7 @@ def load_global(path: str | Path) -> GlobalConfig:
         raise ConfigurationError(
             f"Invalid global configuration in {path!r}:\n{exc}"
         ) from exc
+    cfg = cfg.model_copy(update={"language": resolve_language(cfg.language)})
     _log.debug("Global config loaded: provider=%r, model=%r", cfg.llm.provider, cfg.llm.model)
     return cfg
 

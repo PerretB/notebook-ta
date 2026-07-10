@@ -11,6 +11,7 @@ import nest_asyncio
 from notebook_ta.config.loader import load_exercises, load_global
 from notebook_ta.config.models import ConfigurationError, GlobalConfig, LLMConfig
 from notebook_ta.exercise.definition import Exercise
+from notebook_ta.i18n import set_language, translate
 from notebook_ta.exercise.registry import ExerciseRegistry
 from notebook_ta.llm.base import LLMProvider, create_provider
 from notebook_ta.logging import get_logger, setup_logging
@@ -67,6 +68,7 @@ def load(
     # 1. Load and validate configuration
     _log.info("Loading notebook-ta configuration")
     cfg = load_global(global_config)
+    set_language(cfg.language)
     exercise_configs = load_exercises(exercises_config)
 
     # 1b. Apply programmatic LLM overrides (validated through Pydantic)
@@ -144,9 +146,14 @@ def load(
     with contextlib.suppress(Exception):
         cast(Any, ipydisplay.display)(
             cast(Any, ipydisplay.Markdown)(
-                "✅ **notebook-ta loaded.**  "
-                f"Provider: `{cfg.llm.provider}` — Model: `{cfg.llm.model}`  \n"
-                f"{len(exercise_configs)} exercise(s) registered."
+                translate(
+                    "load_success",
+                    {
+                        "provider": cfg.llm.provider,
+                        "model": cfg.llm.model,
+                        "exercise_count": len(exercise_configs),
+                    },
+                )
             )
         )
 
@@ -194,31 +201,38 @@ def _run_setup_wizard(cfg: GlobalConfig) -> None:
         if model_spec is not None:
             cfg.llm.model = model_spec.name
             gpu_text = (
-                f", GPU: {profile.gpu_name} ({profile.vram_gb:.1f} GB VRAM)"
+                translate(
+                    "hardware_gpu_text",
+                    {"gpu_name": profile.gpu_name, "vram_gb": profile.vram_gb},
+                )
                 if profile.gpu_name
                 else ""
             )
             cast(Any, ipydisplay.display)(
                 cast(Any, ipydisplay.Markdown)(
-                    "🔍 **Hardware detected** — auto-selecting LLM model:\n\n"
-                    f"- RAM: {profile.ram_gb:.1f} GB"
-                    + gpu_text
-                    + f"\n- **Selected model:** `{model_spec.name}` — {model_spec.description}"
+                    translate(
+                        "hardware_detected",
+                        {
+                            "ram_gb": profile.ram_gb,
+                            "gpu_text": gpu_text,
+                            "model_name": model_spec.name,
+                            "model_description": model_spec.description,
+                        },
+                    )
                 )
             )
         else:
             gpu_text = (
-                f", GPU: {profile.gpu_name} ({profile.vram_gb:.1f} GB VRAM)"
+                translate(
+                    "hardware_gpu_text",
+                    {"gpu_name": profile.gpu_name, "vram_gb": profile.vram_gb},
+                )
                 if profile.gpu_name
                 else ""
             )
             cast(Any, ipydisplay.display)(
                 cast(Any, ipydisplay.Markdown)(
-                    "⚠️ **Hardware auto-detection:** No suitable model found for your hardware.\n\n"
-                    f"- RAM: {profile.ram_gb:.1f} GB"
-                    + gpu_text
-                    + "\n\nThe LLM provider will be marked as unavailable. "
-                    "Please configure a model manually in your `global_config.toml`."
+                    translate("hardware_no_model", {"ram_gb": profile.ram_gb, "gpu_text": gpu_text})
                 )
             )
     except Exception:

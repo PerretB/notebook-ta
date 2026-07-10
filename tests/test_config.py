@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import textwrap
 from pathlib import Path
 
@@ -97,6 +98,7 @@ class TestLoadGlobal:
         assert cfg.llm.timeout == 60
         assert cfg.llm.streaming is True
         assert cfg.unit_test_timeout == 2.5
+        assert cfg.language == "en"
         assert len(cfg.llm.available_models) == 2
         assert cfg.prompts.on_success == "Great job!"
         assert cfg.prompts.hint_history_length == 3
@@ -185,6 +187,50 @@ class TestLoadExercises:
         cfg = load_global(f)
 
         assert cfg.unit_test_timeout == 5.0
+
+    def test_global_language_defaults_to_english(self, tmp_path: Path) -> None:
+        content = textwrap.dedent("""\
+            [llm]
+            provider = "ollama"
+            model = "llama3.2:3b"
+            base_url = "http://localhost:11434"
+
+            [prompts]
+            on_success = "Great job!"
+            on_failure = "Try again."
+            on_no_llm = "LLM unavailable."
+        """)
+        f = tmp_path / "default_language.toml"
+        f.write_text(content, encoding="utf-8")
+
+        cfg = load_global(f)
+
+        assert cfg.language == "en"
+
+    def test_unsupported_global_language_warns_and_falls_back(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        content = textwrap.dedent("""\
+            language = "zz"
+
+            [llm]
+            provider = "ollama"
+            model = "llama3.2:3b"
+            base_url = "http://localhost:11434"
+
+            [prompts]
+            on_success = "Great job!"
+            on_failure = "Try again."
+            on_no_llm = "LLM unavailable."
+        """)
+        f = tmp_path / "unsupported_language.toml"
+        f.write_text(content, encoding="utf-8")
+
+        caplog.set_level(logging.WARNING, logger="notebook_ta.i18n")
+        cfg = load_global(f)
+
+        assert cfg.language == "en"
+        assert "Unsupported language 'zz' requested" in caplog.text
 
 
 # ---------------------------------------------------------------------------

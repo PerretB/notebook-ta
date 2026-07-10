@@ -60,6 +60,11 @@ class Exercise:
         """Return this exercise's unit test timeout in seconds."""
         return self._config.unit_test_timeout or self._global.unit_test_timeout
 
+    @property
+    def language(self) -> str:
+        """Return the language code configured for user-facing notebook messages."""
+        return self._global.language
+
     def build_prompt(
         self,
         student_code: str,

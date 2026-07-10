@@ -86,6 +86,7 @@ class GlobalConfig(BaseModel):
     llm: LLMConfig
     prompts: PromptConfig
     unit_test_timeout: float = Field(default=5.0, gt=0)
+    language: str = "en"
 
 
 class ConfigurationError(Exception):

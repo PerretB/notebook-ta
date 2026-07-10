@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
 from IPython import display as ipydisplay
 
+from notebook_ta.i18n import set_language, translate
 from notebook_ta.notebook.display import (
     display_busy_message,
     display_hints_button,
@@ -14,6 +16,14 @@ from notebook_ta.notebook.display import (
     set_hint_buttons_busy,
 )
 from notebook_ta.testing.runner import TestResult as RunnerResult
+
+
+@pytest.fixture(autouse=True)
+def reset_display_language() -> None:
+    """Keep display helper tests independent from global language state."""
+    set_language("en")
+    yield
+    set_language("en")
 
 
 def test_display_test_results_converts_ansi_styles_to_html() -> None:
@@ -54,7 +64,7 @@ def test_format_llm_answer_markdown_wraps_answer() -> None:
 
     assert rendered.startswith('<div style="background: rgba(20, 184, 166, 0.14);')
     assert "color: inherit" in rendered
-    assert "🤖 Nice work." in rendered
+    assert f"{translate('display_llm_answer_prefix')}: Nice work." in rendered
     assert rendered.endswith("</div>")
 
 
@@ -65,8 +75,7 @@ def test_display_busy_message_renders_retry_guidance() -> None:
 
     rendered = display_mock.call_args.args[0]
     assert isinstance(rendered, ipydisplay.Markdown)
-    assert "notebook-ta is already working" in rendered.data
-    assert "try again" in rendered.data
+    assert translate("display_busy") in rendered.data
 
 
 def test_display_hints_button_uses_theme_aware_transparent_container() -> None:
@@ -105,8 +114,7 @@ def test_display_hints_button_shows_busy_status_locally() -> None:
 
     button.click()
 
-    assert "notebook-ta is already working" in status.value
-    assert "Try again" in status.value
+    assert translate("display_hints_busy_status") in status.value
     assert display_mock.call_count == 2
 
 
@@ -124,15 +132,15 @@ def test_hint_buttons_can_be_disabled_and_restored_globally() -> None:
 
     assert first_button.disabled is True
     assert second_button.disabled is True
-    assert first_button.description == "Busy"
-    assert second_button.description == "Busy"
+    assert first_button.description == translate("display_hints_busy_button")
+    assert second_button.description == translate("display_hints_busy_button")
 
     set_hint_buttons_busy(False)
 
     assert first_button.disabled is False
     assert second_button.disabled is False
-    assert first_button.description == "Give me hints"
-    assert second_button.description == "Give me hints"
+    assert first_button.description == translate("display_hints_button")
+    assert second_button.description == translate("display_hints_button")
 
 
 def test_busy_hint_button_click_does_not_call_callback() -> None:
@@ -154,6 +162,18 @@ def test_busy_hint_button_click_does_not_call_callback() -> None:
 
     assert callback_called is False
     assert button.disabled is True
-    assert button.description == "Busy"
+    assert button.description == translate("display_hints_busy_button")
 
     set_hint_buttons_busy(False)
+
+
+def test_display_busy_message_uses_configured_language() -> None:
+    """Notebook warnings should use the active configured language."""
+    set_language("fr")
+
+    with patch("notebook_ta.notebook.display.ipydisplay.display") as display_mock:
+        display_busy_message()
+
+    rendered = display_mock.call_args.args[0]
+    assert isinstance(rendered, ipydisplay.Markdown)
+    assert translate("display_busy", language="fr") in rendered.data

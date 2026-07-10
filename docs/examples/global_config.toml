@@ -1,4 +1,5 @@
 unit_test_timeout = 5.0
+language = "en"
 
 [llm]
 provider = "ollama"

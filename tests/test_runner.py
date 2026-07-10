@@ -12,6 +12,7 @@ from notebook_ta.config.models import (
     TestDefinition,
 )
 from notebook_ta.exercise.definition import Exercise
+from notebook_ta.i18n import translate
 from notebook_ta.testing.runner import TestRunner
 
 # ---------------------------------------------------------------------------
@@ -27,6 +28,7 @@ def make_exercise(
     *,
     global_timeout: float = 5.0,
     exercise_timeout: float | None = None,
+    language: str = "en",
 ) -> Exercise:
     cfg = ExerciseConfig(
         id="ex",
@@ -43,6 +45,7 @@ def make_exercise(
             on_no_llm="n",
         ),
         unit_test_timeout=global_timeout,
+        language=language,
     )
     return Exercise(config=cfg, global_config=global_cfg)
 
@@ -143,6 +146,18 @@ class TestNamespaceInjection:
         results = make_runner().run(ex, {})
         assert results[0].passed is False
         assert "add" in (results[0].message or "")
+
+    def test_missing_symbol_uses_configured_language(self) -> None:
+        td = TestDefinition(name="t", code=INLINE_BOOL_CODE)
+        ex = make_exercise([td], language="fr")
+
+        results = make_runner().run(ex, {})
+
+        assert results[0].passed is False
+        assert (
+            translate("runner_missing_student_name", {"name": "add"}, language="fr")
+            == results[0].message
+        )
 
     def test_student_globals_injection(self) -> None:
         td = TestDefinition(name="t", code=INLINE_STUDENT_GLOBALS_CODE)

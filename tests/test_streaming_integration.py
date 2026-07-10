@@ -11,6 +11,7 @@ from IPython import display as ipydisplay
 from notebook_ta.config.models import ExerciseConfig, GlobalConfig, LLMConfig, PromptConfig
 from notebook_ta.exercise.definition import Exercise
 from notebook_ta.exercise.registry import ExerciseRegistry
+from notebook_ta.i18n import translate
 from notebook_ta.notebook.magic import NotebookTAMagic
 from notebook_ta.notebook.session import SessionState
 from notebook_ta.testing.runner import TestResult
@@ -156,7 +157,7 @@ class TestStreamingIntegration:
 
         final_update = mock_handle.update.call_args.args[0]
         assert isinstance(final_update, ipydisplay.Markdown)
-        assert "🤖 Hello world!" in final_update.data
+        assert f"{translate('display_llm_answer_prefix')}: Hello world!" in final_update.data
 
         # Verify no duplicate displays
         assert mock_ipydisplay.call_count == 1

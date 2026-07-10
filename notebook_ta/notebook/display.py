@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from IPython import display as ipydisplay
 
+from notebook_ta.i18n import translate
 from notebook_ta.notebook._ansi import ansi_to_html
 
 if TYPE_CHECKING:
@@ -62,9 +63,6 @@ _HINT_BUTTON_STYLE = """
 }
 </style>
 """.strip()
-_HINT_BUTTON_DEFAULT_LABEL = "Give me hints"
-_HINT_BUTTON_BUSY_LABEL = "Busy"
-_HINT_BUTTON_FETCHING_LABEL = "Fetching hints..."
 _HINT_BUTTONS_BUSY = False
 _HINT_BUTTONS: list[weakref.ReferenceType[Any]] = []
 
@@ -73,7 +71,9 @@ def _apply_hint_button_state(button: Any) -> None:
     """Apply the current global busy state to a registered hint button."""
     button.disabled = _HINT_BUTTONS_BUSY
     button.description = (
-        _HINT_BUTTON_BUSY_LABEL if _HINT_BUTTONS_BUSY else _HINT_BUTTON_DEFAULT_LABEL
+        translate("display_hints_busy_button")
+        if _HINT_BUTTONS_BUSY
+        else translate("display_hints_button")
     )
 
 
@@ -105,14 +105,15 @@ def hints_are_busy() -> bool:
 
 def format_llm_answer_markdown(answer: str) -> str:
     """Wrap an LLM answer in a visually distinct Markdown block."""
-    return f'<div style="{_LLM_ANSWER_STYLE}">\n\n🤖 {answer}\n\n</div>'
+    return (
+        f'<div style="{_LLM_ANSWER_STYLE}">\n\n'
+        f'{translate("display_llm_answer_prefix")}: {answer}\n\n</div>'
+    )
 
 
 def display_success() -> None:
     """Show a 'tests passed' indicator before streaming begins."""
-    cast(Any, ipydisplay.display)(
-        cast(Any, ipydisplay.Markdown)("✅ **All tests passed!** Generating analysis…")
-    )
+    cast(Any, ipydisplay.display)(cast(Any, ipydisplay.Markdown)(translate("display_success")))
 
 
 def display_test_results(results: list[TestResult]) -> None:
@@ -134,7 +135,10 @@ def display_test_results(results: list[TestResult]) -> None:
             f'<div style="margin: 0.35em 0">{icon} '
             f"<strong>{html.escape(str(result.name))}</strong>{message}</div>"
         )
-    content = '<h3 style="margin-bottom: 0.4em">Test Results</h3>' + "".join(result_blocks)
+    content = (
+        f'<h3 style="margin-bottom: 0.4em">{translate("display_test_results_heading")}</h3>'
+        + "".join(result_blocks)
+    )
     cast(Any, ipydisplay.display)(cast(Any, ipydisplay.HTML)(content))
 
 
@@ -152,8 +156,8 @@ def display_hints_button(
     import ipywidgets as widgets
 
     button = widgets.Button(
-        description="💡 Give me hints",
-        tooltip="Ask the LLM for targeted hints",
+        description=translate("display_hints_button"),
+        tooltip=translate("display_hints_tooltip"),
         layout=widgets.Layout(width="auto"),
     )
     button.style.button_color = "var(--jp-brand-color1, #0f766e)"
@@ -168,20 +172,19 @@ def display_hints_button(
             _apply_hint_button_state(button)
             return
         button.disabled = True
-        button.description = "⏳ Fetching hints…"
+        button.description = translate("display_hints_fetching")
         try:
             accepted = callback(exercise_id)
             if accepted is False:
                 status.value = (
                     '<span style="color: var(--jp-warn-color1, #b45309)">'
-                    "notebook-ta is already working. Try again when the current "
-                    "cell finishes.</span>"
+                    f"{translate('display_hints_busy_status')}</span>"
                 )
             else:
                 status.value = ""
         finally:
             button.disabled = False
-            button.description = "💡 Give me hints"
+            button.description = translate("display_hints_button")
 
     button.on_click(_on_click)
     container = widgets.Box(
@@ -204,7 +207,9 @@ def display_no_llm_message(message: str) -> None:
         message: The ``prompts.on_no_llm`` string from the global config.
     """
     cast(Any, ipydisplay.display)(
-        cast(Any, ipydisplay.Markdown)(f"⚠️ **LLM unavailable**\n\n{message}")
+        cast(Any, ipydisplay.Markdown)(
+            f"**{translate('display_llm_unavailable_heading')}**\n\n{message}"
+        )
     )
 
 
@@ -216,9 +221,7 @@ def display_unavailable_message(exercise_id: str) -> None:
     """
     cast(Any, ipydisplay.display)(
         cast(Any, ipydisplay.Markdown)(
-            f"⚠️ **Exercise `{exercise_id}` not found.**\n\n"
-            "Please check the exercise ID in the magic line and ensure "
-            "`notebook_ta.load()` has been called with the correct exercises file."
+            translate("display_unavailable", {"exercise_id": exercise_id})
         )
     )
 
@@ -226,11 +229,7 @@ def display_unavailable_message(exercise_id: str) -> None:
 def display_busy_message() -> None:
     """Render a warning when notebook-ta is already processing another request."""
     cast(Any, ipydisplay.display)(
-        cast(Any, ipydisplay.Markdown)(
-            "â³ **notebook-ta is already working.**\n\n"
-            "Please wait for the current notebook-ta cell or hint request to finish, "
-            "then try again."
-        )
+        cast(Any, ipydisplay.Markdown)(translate("display_busy"))
     )
 
 
@@ -254,6 +253,6 @@ def display_debug_prompt(prompt: str, call_type: str = "analysis") -> None:
         disabled=True,
     )
     accordion = widgets.Accordion(children=[textarea])
-    accordion.set_title(0, f"🐛 Debug – LLM Prompt ({call_type})")
+    accordion.set_title(0, translate("debug_prompt_title", {"call_type": call_type}))
     accordion.selected_index = None  # start closed
     cast(Any, ipydisplay.display)(accordion)

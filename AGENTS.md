@@ -10,6 +10,10 @@ Detailed architecture: [Architecture.md](Architecture.md)
 - Update Documentation in `docs/` for any public API changes
 - Update dependencies in `pyproject.toml` if new packages are added to the project
 - Update developer documentation for any architecture changes (see [Architecture.md](Architecture.md))
+- If a request is ambiguous, ask for clarification before implementing
+- If a request is impossible to implement or dangerous, explain why and suggest alternatives
+- If a request implies a change to the public API, ask for approval before implementing
+- If a request implies a significant design choice, propose the design and ask for approval before implementing
 
 ---
 
