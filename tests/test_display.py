@@ -7,9 +7,11 @@ from unittest.mock import patch
 from IPython import display as ipydisplay
 
 from notebook_ta.notebook.display import (
+    display_busy_message,
     display_hints_button,
     display_test_results,
     format_llm_answer_markdown,
+    set_hint_buttons_busy,
 )
 from notebook_ta.testing.runner import TestResult as RunnerResult
 
@@ -56,6 +58,17 @@ def test_format_llm_answer_markdown_wraps_answer() -> None:
     assert rendered.endswith("</div>")
 
 
+def test_display_busy_message_renders_retry_guidance() -> None:
+    """Busy warnings should tell users to wait instead of starting nested work."""
+    with patch("notebook_ta.notebook.display.ipydisplay.display") as display_mock:
+        display_busy_message()
+
+    rendered = display_mock.call_args.args[0]
+    assert isinstance(rendered, ipydisplay.Markdown)
+    assert "notebook-ta is already working" in rendered.data
+    assert "try again" in rendered.data
+
+
 def test_display_hints_button_uses_theme_aware_transparent_container() -> None:
     """Hint button output should not force a white background in notebook themes."""
     with patch("notebook_ta.notebook.display.ipydisplay.display") as display_mock:
@@ -79,3 +92,68 @@ def test_display_hints_button_uses_theme_aware_transparent_container() -> None:
     button = button_output.children[0]
     assert button.style.button_color == "var(--jp-brand-color1, #0f766e)"
     assert button.style.text_color == "var(--jp-ui-inverse-font-color1, #ffffff)"
+
+
+def test_display_hints_button_shows_busy_status_locally() -> None:
+    """Rejected hint requests should update the existing widget, not display elsewhere."""
+    set_hint_buttons_busy(False)
+    with patch("notebook_ta.notebook.display.ipydisplay.display") as display_mock:
+        display_hints_button("exercise-id", callback=lambda _exercise_id: False)
+
+    button_output = display_mock.call_args_list[1].args[0]
+    button, status = button_output.children
+
+    button.click()
+
+    assert "notebook-ta is already working" in status.value
+    assert "Try again" in status.value
+    assert display_mock.call_count == 2
+
+
+def test_hint_buttons_can_be_disabled_and_restored_globally() -> None:
+    """All registered hint buttons should reflect the notebook-ta busy state."""
+    set_hint_buttons_busy(False)
+    with patch("notebook_ta.notebook.display.ipydisplay.display") as display_mock:
+        display_hints_button("ex1", callback=lambda _exercise_id: None)
+        display_hints_button("ex2", callback=lambda _exercise_id: None)
+
+    first_button = display_mock.call_args_list[1].args[0].children[0]
+    second_button = display_mock.call_args_list[3].args[0].children[0]
+
+    set_hint_buttons_busy(True)
+
+    assert first_button.disabled is True
+    assert second_button.disabled is True
+    assert first_button.description == "Busy"
+    assert second_button.description == "Busy"
+
+    set_hint_buttons_busy(False)
+
+    assert first_button.disabled is False
+    assert second_button.disabled is False
+    assert first_button.description == "Give me hints"
+    assert second_button.description == "Give me hints"
+
+
+def test_busy_hint_button_click_does_not_call_callback() -> None:
+    """A click event that arrives while globally busy should be ignored locally."""
+    callback_called = False
+
+    def _callback(_exercise_id: str) -> None:
+        nonlocal callback_called
+        callback_called = True
+
+    set_hint_buttons_busy(False)
+    with patch("notebook_ta.notebook.display.ipydisplay.display") as display_mock:
+        display_hints_button("exercise-id", callback=_callback)
+
+    button = display_mock.call_args_list[1].args[0].children[0]
+    set_hint_buttons_busy(True)
+
+    button.click()
+
+    assert callback_called is False
+    assert button.disabled is True
+    assert button.description == "Busy"
+
+    set_hint_buttons_busy(False)

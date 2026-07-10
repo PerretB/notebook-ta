@@ -357,14 +357,19 @@ IPython instance. Called automatically by `notebook_ta.load()`.
 
 Execution steps:
 
-1. Execute `cell` in the IPython user namespace via `ip.run_cell(cell)`
-2. Retrieve the exercise from `ExerciseRegistry`; if not found, call
+1. Retrieve the exercise from `ExerciseRegistry`; if not found, call
    `display.display_unavailable_message()` and return
-3. Run `TestRunner.run(exercise, ip.user_ns)`
-4. Branch on results:
+2. Reserve the `NotebookTAMagic` instance's in-process busy guard; if another
+   notebook-ta operation is already running, call `display.display_busy_message()` and return
+3. Disable all registered hint buttons and set their label to `"Busy"`
+4. Execute `cell` in the IPython user namespace via `ip.run_cell(cell)`
+5. Run `TestRunner.run(exercise, ip.user_ns)`
+6. Branch on results:
    - **All pass** → `display.display_success()` + stream LLM success analysis
    - **Any fail** → `display.display_test_results(results)` + `display.display_hints_button()`
    - **LLM unavailable** (either branch) → `display.display_no_llm_message()`
+
+7. In a `finally` block, restore registered hint buttons to enabled `"Give me hints"` state
 
 ### 7.2 Hint History & LLM Escalation (`notebook/session.py`)
 
@@ -388,10 +393,13 @@ The deque for each exercise is initialized with `maxlen = hint_history_length` f
 
 On each "Give me hints" button click:
 
-1. Retrieve `history = session.get_history(exercise_id, hint_history_length)`
-2. Build the prompt via `exercise.build_prompt(student_code, test_results, hint_history=history)`
-3. Stream the LLM response
-4. Append `HintExchange(student_code, full_response)` to history
+1. Ignore the click immediately if the global hint-button busy state is already active
+2. Reserve the `NotebookTAMagic` busy guard and disable all registered hint buttons
+3. Retrieve `history = session.get_history(exercise_id, hint_history_length)`
+4. Build the prompt via `exercise.build_prompt(student_code, test_results, hint_history=history)`
+5. Stream the LLM response
+6. Append `HintExchange(student_code, full_response)` to history
+7. In a `finally` block, restore registered hint buttons to enabled `"Give me hints"` state
 
 The `on_failure` prompt is used for all hint requests. The LLM naturally escalates its guidance
 based on the previous hint exchanges appended to the context. No predefined hint levels or hint
@@ -411,6 +419,7 @@ All display functions use `IPython.display` and `ipywidgets`.
 | `display_hints_button(exercise_id, callback)` | `ipywidgets.Button` labeled "💡 Give me hints"               |
 | `display_no_llm_message(message)`     | Renders the configured `on_no_llm` string as `IPython.display.Markdown` |
 | `display_unavailable_message(id)`     | Rendered warning when the exercise ID is not found in the registry       |
+| `display_busy_message()`              | Rendered warning when notebook-ta ignores a request because another notebook-ta operation is already running |
 | `display_debug_prompt(prompt, call_type)` | Collapsible `ipywidgets.Accordion` showing the full LLM prompt; only called when `debug=True` |
 
 ### 7.4 Streaming (`notebook/streaming.py`)

@@ -225,6 +225,27 @@ class TestLLMUnavailable:
 # ---------------------------------------------------------------------------
 
 class TestHintHistory:
+    @patch("notebook_ta.notebook.magic.display")
+    def test_hint_click_during_cell_execution_is_rejected(self, mock_display) -> None:
+        ip = make_ip_stub()
+        magic = make_magic(ip=ip)
+        failing_results = [TestResult("t", False)]
+        hint_results: list[bool] = []
+
+        def _run_while_hint_is_clicked(_exercise, _namespace):
+            hint_results.append(
+                magic._hint_callback("ex1", "previous student code", failing_results)
+            )
+            return failing_results
+
+        with patch.object(magic._runner, "run", side_effect=_run_while_hint_is_clicked):
+            magic.notebook_ta("ex1", "def add(a,b): return 0")
+
+        assert hint_results == [False]
+        mock_display.display_busy_message.assert_not_called()
+        assert magic._session.get_history("ex1", 3) == []
+        magic._llm.is_available.assert_not_called()
+
     def test_hint_appended_to_session(self) -> None:
         ip = make_ip_stub()
         magic = make_magic(ip=ip)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import weakref
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
@@ -61,6 +62,45 @@ _HINT_BUTTON_STYLE = """
 }
 </style>
 """.strip()
+_HINT_BUTTON_DEFAULT_LABEL = "Give me hints"
+_HINT_BUTTON_BUSY_LABEL = "Busy"
+_HINT_BUTTON_FETCHING_LABEL = "Fetching hints..."
+_HINT_BUTTONS_BUSY = False
+_HINT_BUTTONS: list[weakref.ReferenceType[Any]] = []
+
+
+def _apply_hint_button_state(button: Any) -> None:
+    """Apply the current global busy state to a registered hint button."""
+    button.disabled = _HINT_BUTTONS_BUSY
+    button.description = (
+        _HINT_BUTTON_BUSY_LABEL if _HINT_BUTTONS_BUSY else _HINT_BUTTON_DEFAULT_LABEL
+    )
+
+
+def _live_hint_buttons() -> list[Any]:
+    """Return currently live hint button widgets and prune stale references."""
+    live_buttons: list[Any] = []
+    live_refs: list[weakref.ReferenceType[Any]] = []
+    for button_ref in _HINT_BUTTONS:
+        button = button_ref()
+        if button is not None:
+            live_buttons.append(button)
+            live_refs.append(button_ref)
+    _HINT_BUTTONS[:] = live_refs
+    return live_buttons
+
+
+def set_hint_buttons_busy(is_busy: bool) -> None:
+    """Disable or enable all registered hint buttons for notebook-ta operations."""
+    global _HINT_BUTTONS_BUSY
+    _HINT_BUTTONS_BUSY = is_busy
+    for button in _live_hint_buttons():
+        _apply_hint_button_state(button)
+
+
+def hints_are_busy() -> bool:
+    """Return whether hint buttons are globally disabled because notebook-ta is busy."""
+    return _HINT_BUTTONS_BUSY
 
 
 def format_llm_answer_markdown(answer: str) -> str:
@@ -100,13 +140,14 @@ def display_test_results(results: list[TestResult]) -> None:
 
 def display_hints_button(
     exercise_id: str,
-    callback: Callable[[str], None],
+    callback: Callable[[str], bool | None],
 ) -> None:
     """Render an interactive 'Give me hints' button.
 
     Args:
         exercise_id: The exercise ID passed to the callback.
-        callback: Called with exercise_id when the button is clicked.
+        callback: Called with exercise_id when the button is clicked. Returning
+            ``False`` means the request was ignored because notebook-ta is busy.
     """
     import ipywidgets as widgets
 
@@ -118,20 +159,38 @@ def display_hints_button(
     button.style.button_color = "var(--jp-brand-color1, #0f766e)"
     button.style.text_color = "var(--jp-ui-inverse-font-color1, #ffffff)"
     button.add_class("notebook-ta-hint-button")
+    status = widgets.HTML(value="", layout=widgets.Layout(margin="0 0 0 0.5em"))
+    _HINT_BUTTONS.append(weakref.ref(button))
+    _apply_hint_button_state(button)
 
     def _on_click(_event: object) -> None:
+        if _HINT_BUTTONS_BUSY:
+            _apply_hint_button_state(button)
+            return
         button.disabled = True
         button.description = "⏳ Fetching hints…"
         try:
-            callback(exercise_id)
+            accepted = callback(exercise_id)
+            if accepted is False:
+                status.value = (
+                    '<span style="color: var(--jp-warn-color1, #b45309)">'
+                    "notebook-ta is already working. Try again when the current "
+                    "cell finishes.</span>"
+                )
+            else:
+                status.value = ""
         finally:
             button.disabled = False
             button.description = "💡 Give me hints"
 
     button.on_click(_on_click)
     container = widgets.Box(
-        [button],
-        layout=widgets.Layout(display="inline-flex", width="auto"),
+        [button, status],
+        layout=widgets.Layout(
+            align_items="center",
+            display="inline-flex",
+            width="auto",
+        ),
     )
     container.add_class("notebook-ta-hints")
     cast(Any, ipydisplay.display)(cast(Any, ipydisplay.HTML)(_HINT_BUTTON_STYLE))
@@ -160,6 +219,17 @@ def display_unavailable_message(exercise_id: str) -> None:
             f"⚠️ **Exercise `{exercise_id}` not found.**\n\n"
             "Please check the exercise ID in the magic line and ensure "
             "`notebook_ta.load()` has been called with the correct exercises file."
+        )
+    )
+
+
+def display_busy_message() -> None:
+    """Render a warning when notebook-ta is already processing another request."""
+    cast(Any, ipydisplay.display)(
+        cast(Any, ipydisplay.Markdown)(
+            "â³ **notebook-ta is already working.**\n\n"
+            "Please wait for the current notebook-ta cell or hint request to finish, "
+            "then try again."
         )
     )
 
