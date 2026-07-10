@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 import cloudpickle  # type: ignore[import-untyped]
 
 from notebook_ta.config.models import TestDefinition
+from notebook_ta.i18n import translate
 
 if TYPE_CHECKING:
     from notebook_ta.exercise.definition import Exercise
@@ -24,11 +25,11 @@ if TYPE_CHECKING:
 
 def _execute_test_callable(payload: bytes, result_queue: Any) -> None:
     """Run a serialized test callable in a child process and return a serialized result."""
-    name, fn, args = cast(
-        tuple[str, Callable[..., Any], dict[str, Any]],
+    name, fn, args, language = cast(
+        tuple[str, Callable[..., Any], dict[str, Any], str],
         cloudpickle.loads(payload),
     )
-    result = TestRunner._invoke_callable(name, fn, args)
+    result = TestRunner._invoke_callable(name, fn, args, language)
     result_queue.put(cloudpickle.dumps(result))
 
 
@@ -58,37 +59,56 @@ class TestRunner:
         """
         results: list[TestResult] = []
         for test_def in exercise.tests:
-            results.append(self._run_one(test_def, namespace, exercise.unit_test_timeout))
+            results.append(
+                self._run_one(
+                    test_def,
+                    namespace,
+                    exercise.unit_test_timeout,
+                    exercise.language,
+                )
+            )
         return results
 
     def _run_one(
-        self, test_def: TestDefinition, namespace: dict[str, Any], timeout: float
+        self,
+        test_def: TestDefinition,
+        namespace: dict[str, Any],
+        timeout: float,
+        language: str,
     ) -> TestResult:
         """Resolve and invoke a single test function, returning a TestResult."""
         try:
-            fn = self._resolve(test_def)
+            fn = self._resolve(test_def, language)
         except Exception as exc:
             return TestResult(name=test_def.name, passed=False, message=str(exc))
 
         try:
-            args = self._build_args(fn, namespace)
+            args = self._build_args(fn, namespace, language)
         except LookupError as exc:
             return TestResult(name=test_def.name, passed=False, message=str(exc))
 
-        return self._run_with_timeout(test_def.name, fn, args, float(timeout))
+        return self._run_with_timeout(test_def.name, fn, args, float(timeout), language)
 
     @staticmethod
     def _run_with_timeout(
-        name: str, fn: Callable[..., Any], args: dict[str, Any], timeout: float
+        name: str,
+        fn: Callable[..., Any],
+        args: dict[str, Any],
+        timeout: float,
+        language: str,
     ) -> TestResult:
         """Invoke one test callable in a child process with a wall-clock timeout."""
         try:
-            payload = cloudpickle.dumps((name, fn, args))
+            payload = cloudpickle.dumps((name, fn, args, language))
         except Exception as exc:
             return TestResult(
                 name=name,
                 passed=False,
-                message=f"Could not prepare unit test for timeout enforcement: {exc}",
+                message=translate(
+                    "runner_prepare_timeout_failed",
+                    {"error": exc},
+                    language=language,
+                ),
             )
 
         ctx = multiprocessing.get_context("spawn")
@@ -105,7 +125,7 @@ class TestRunner:
             return TestResult(
                 name=name,
                 passed=False,
-                message=f"Unit test timed out after {timeout:g} seconds and was cancelled.",
+                message=translate("runner_timed_out", {"timeout": timeout}, language=language),
             )
 
         try:
@@ -114,7 +134,7 @@ class TestRunner:
             return TestResult(
                 name=name,
                 passed=False,
-                message="Unit test process exited without returning a result.",
+                message=translate("runner_process_no_result", language=language),
             )
         finally:
             result_queue.close()
@@ -123,7 +143,7 @@ class TestRunner:
 
     @staticmethod
     def _invoke_callable(
-        name: str, fn: Callable[..., Any], args: dict[str, Any]
+        name: str, fn: Callable[..., Any], args: dict[str, Any], language: str
     ) -> TestResult:
         """Invoke a resolved test callable and convert its output to a TestResult."""
         stdout_buf = io.StringIO()
@@ -134,14 +154,14 @@ class TestRunner:
             captured = stdout_buf.getvalue()
             msg = str(exc)
             if captured:
-                msg = f"{msg}\nOutput: {captured}"
+                msg = f"{msg}\n{translate('runner_output_label', language=language)}: {captured}"
             return TestResult(name=name, passed=False, message=msg)
 
         captured = stdout_buf.getvalue().strip()
-        return TestRunner._interpret_result(name, result, captured)
+        return TestRunner._interpret_result(name, result, captured, language)
 
     @staticmethod
-    def _resolve(test_def: TestDefinition) -> Callable[..., Any]:
+    def _resolve(test_def: TestDefinition, language: str) -> Callable[..., Any]:
         """Return the callable for a TestDefinition."""
         if test_def.code is not None:
             # Inline source: exec into an isolated namespace
@@ -154,19 +174,34 @@ class TestRunner:
                 if callable(v) and not k.startswith("__")
             }
             if not callables:
-                raise ValueError(f"No callable found in inline test code for {test_def.name!r}.")
+                raise ValueError(
+                    translate(
+                        "runner_inline_no_callable",
+                        {"test_name": test_def.name},
+                        language=language,
+                    )
+                )
             if test_def.function:
                 if test_def.function not in callables:
                     raise ValueError(
-                        f"Function {test_def.function!r} not found in inline test "
-                        f"code for {test_def.name!r}."
+                        translate(
+                            "runner_inline_function_missing",
+                            {
+                                "function_name": test_def.function,
+                                "test_name": test_def.name,
+                            },
+                            language=language,
+                        )
                     )
                 return callables[test_def.function]
             if len(callables) == 1:
                 return next(iter(callables.values()))
             raise ValueError(
-                f"Multiple callables in inline test code for {test_def.name!r}; "
-                f"specify 'function' to disambiguate. Found: {list(callables)}"
+                translate(
+                    "runner_inline_multiple_callables",
+                    {"test_name": test_def.name, "callables": list(callables)},
+                    language=language,
+                )
             )
         else:
             # External module + function
@@ -177,7 +212,7 @@ class TestRunner:
 
     @staticmethod
     def _build_args(
-        fn: Callable[..., Any], namespace: dict[str, Any]
+        fn: Callable[..., Any], namespace: dict[str, Any], language: str
     ) -> dict[str, Any]:
         """Build the keyword argument dict for the test function.
 
@@ -194,14 +229,19 @@ class TestRunner:
         for param in params:
             if param not in namespace:
                 raise LookupError(
-                    f"Name {param!r} is not defined in the student's namespace. "
-                    "Make sure the student defines it before running the tests."
+                    translate(
+                        "runner_missing_student_name",
+                        {"name": param},
+                        language=language,
+                    )
                 )
             args[param] = namespace[param]
         return args
 
     @staticmethod
-    def _interpret_result(name: str, result: object, captured_stdout: str) -> TestResult:
+    def _interpret_result(
+        name: str, result: object, captured_stdout: str, language: str
+    ) -> TestResult:
         """Convert the raw return value + captured stdout into a TestResult."""
         if isinstance(result, bool):
             return TestResult(name=name, passed=result, message=captured_stdout or None)
@@ -209,7 +249,10 @@ class TestRunner:
             passed, message = result
             full_message = str(message)
             if captured_stdout:
-                full_message = f"{full_message}\nOutput: {captured_stdout}"
+                full_message = (
+                    f"{full_message}\n"
+                    f"{translate('runner_output_label', language=language)}: {captured_stdout}"
+                )
             return TestResult(name=name, passed=bool(passed), message=full_message or None)
         # Fallback: treat truthy return as pass
         passed = bool(result)

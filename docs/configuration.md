@@ -58,6 +58,12 @@ requirements are met by the detected hardware.
 |-----|------|---------|-------------|
 | `unit_test_timeout` | number | `5.0` | Maximum wall-clock seconds allowed for each configured unit test. Timed-out tests are cancelled and reported as failures. |
 
+### Internationalization
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `language` | string | `"en"` | Language code for notebook-facing messages and labels. Built-in languages are `"en"` and `"fr"`. Unsupported values emit a log warning and fall back to English. |
+
 ---
 
 ## `exercises.toml`
@@ -93,6 +99,7 @@ Exactly one of `code` or (`module` + `function`) must be specified.
 
 ```toml
 unit_test_timeout = 5.0
+language = "en"
 
 [llm]
 provider = "ollama"
