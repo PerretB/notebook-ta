@@ -19,6 +19,7 @@ import types
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from typing import cast
 
 import cloudpickle  # type: ignore[import-untyped]
 
@@ -219,7 +220,7 @@ def run_solution_tests_with_timeout(
     finally:
         result_queue.close()  # type: ignore[attr-defined]
 
-    return cloudpickle.loads(result_payload)
+    return cast(_BenchmarkTestRunResult, cloudpickle.loads(result_payload))
 
 
 class BenchExecutor:

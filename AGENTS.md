@@ -5,7 +5,7 @@ Detailed architecture: [Architecture.md](Architecture.md)
 
 
 ## Agent guidelines
-- All changes implying code files must be tested with `pytest`
+- All changes implying code files must be tested with `pytest` and `mypy` (documentation-only changes are exempt)
 - Doc strings are required on all public functions and class methods
 - Update Documentation in `docs/` for any public API changes
 - Update dependencies in `pyproject.toml` if new packages are added to the project
@@ -35,16 +35,13 @@ diagrams, and the full file tree.
 
 ```bash
 # Install in editable mode with all dev dependencies
-py -3.11 -m pip install -e ".[dev]"
+python -m pip install -e ".[dev]"
 
 # Run the full test suite
-py -3.11 -m pytest tests/
-
-# Lint
-py -3.11 -m ruff check notebook_ta/ tests/
+python -m pytest tests/
 
 # Type-check
-py -3.11 -m mypy notebook_ta/
+python -m mypy notebook_ta/
 ```
 
 CI runs on Python 3.11 and 3.12 across Ubuntu, macOS, and Windows — see
