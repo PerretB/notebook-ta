@@ -17,16 +17,6 @@ from notebook_ta.notebook.session import SessionState
 from notebook_ta.testing.runner import TestResult
 
 
-def run_mocked_coroutine(result: str):
-    """Return a run_until_complete mock that closes the coroutine passed by production code."""
-
-    def _run(coro):
-        coro.close()
-        return result
-
-    return MagicMock(side_effect=_run)
-
-
 class FakeLLMProvider:
     """Fake LLM provider that yields known chunks in a stream."""
 
@@ -102,14 +92,15 @@ class TestStreamingIntegration:
         magic.shell = ip
 
         # Mock runner to return all-pass, which triggers LLM feedback
-        with (
-            patch.object(magic._runner, "run", return_value=[TestResult("test", True)]),
-            patch("asyncio.get_event_loop") as mock_loop,
-        ):
-            loop = MagicMock()
-            loop.run_until_complete = run_mocked_coroutine("This is feedback.")
-            mock_loop.return_value = loop
-            magic.notebook_ta("ex1", "def add(a, b): return a + b")
+        loop = asyncio.new_event_loop()
+        try:
+            with (
+                patch.object(magic._runner, "run", return_value=[TestResult("test", True)]),
+                patch("asyncio.get_event_loop", return_value=loop),
+            ):
+                magic.notebook_ta("ex1", "def add(a, b): return a + b")
+        finally:
+            loop.close()
 
         # Verify display_success was called (initial "all tests passed" message)
         mock_display.display_success.assert_called_once()
@@ -139,6 +130,7 @@ class TestStreamingIntegration:
         try:
             result = loop.run_until_complete(stream_to_output(fake_stream()))
         finally:
+            asyncio.set_event_loop(None)
             loop.close()
 
         # Verify result is the concatenation
