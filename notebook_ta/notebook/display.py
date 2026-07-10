@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import html
+import inspect
 import weakref
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable, Coroutine
 from typing import TYPE_CHECKING, Any, cast
 
 from IPython import display as ipydisplay
@@ -65,6 +67,21 @@ _HINT_BUTTON_STYLE = """
 """.strip()
 _HINT_BUTTONS_BUSY = False
 _HINT_BUTTONS: list[weakref.ReferenceType[Any]] = []
+_BACKGROUND_TASKS: set[asyncio.Task[Any]] = set()
+
+
+def _schedule_background_task(coroutine: Coroutine[Any, Any, None]) -> None:
+    """Keep a background display task alive until it completes."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(coroutine)
+        return
+
+    task = loop.create_task(coroutine)
+    _BACKGROUND_TASKS.add(task)
+    task.add_done_callback(_BACKGROUND_TASKS.discard)
 
 
 def _apply_hint_button_state(button: Any) -> None:
@@ -144,7 +161,7 @@ def display_test_results(results: list[TestResult]) -> None:
 
 def display_hints_button(
     exercise_id: str,
-    callback: Callable[[str], bool | None],
+    callback: Callable[[str], Awaitable[bool | None] | bool | None],
 ) -> None:
     """Render an interactive 'Give me hints' button.
 
@@ -152,6 +169,7 @@ def display_hints_button(
         exercise_id: The exercise ID passed to the callback.
         callback: Called with exercise_id when the button is clicked. Returning
             ``False`` means the request was ignored because notebook-ta is busy.
+            Awaitable results keep the button disabled until the request finishes.
     """
     import ipywidgets as widgets
 
@@ -167,24 +185,44 @@ def display_hints_button(
     _HINT_BUTTONS.append(weakref.ref(button))
     _apply_hint_button_state(button)
 
+    def _restore_button() -> None:
+        if _HINT_BUTTONS_BUSY:
+            _apply_hint_button_state(button)
+            return
+        button.disabled = False
+        button.description = translate("display_hints_button")
+
+    def _apply_result(accepted: bool | None) -> None:
+        if accepted is False:
+            status.value = (
+                '<span style="color: var(--jp-warn-color1, #b45309)">'
+                f"{translate('display_hints_busy_status')}</span>"
+            )
+        else:
+            status.value = ""
+
     def _on_click(_event: object) -> None:
         if _HINT_BUTTONS_BUSY:
             _apply_hint_button_state(button)
             return
         button.disabled = True
         button.description = translate("display_hints_fetching")
+        accepted: Awaitable[bool | None] | bool | None = None
         try:
             accepted = callback(exercise_id)
-            if accepted is False:
-                status.value = (
-                    '<span style="color: var(--jp-warn-color1, #b45309)">'
-                    f"{translate('display_hints_busy_status')}</span>"
-                )
-            else:
-                status.value = ""
+            if inspect.isawaitable(accepted):
+                async def _finish_async_request() -> None:
+                    try:
+                        _apply_result(await accepted)
+                    finally:
+                        _restore_button()
+
+                _schedule_background_task(_finish_async_request())
+                return
+            _apply_result(accepted)
         finally:
-            button.disabled = False
-            button.description = translate("display_hints_button")
+            if not inspect.isawaitable(accepted):
+                _restore_button()
 
     button.on_click(_on_click)
     container = widgets.Box(

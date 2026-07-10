@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import patch
 
 import pytest
@@ -9,6 +10,7 @@ from IPython import display as ipydisplay
 
 from notebook_ta.i18n import set_language, translate
 from notebook_ta.notebook.display import (
+    _BACKGROUND_TASKS,
     display_busy_message,
     display_hints_button,
     display_test_results,
@@ -116,6 +118,37 @@ def test_display_hints_button_shows_busy_status_locally() -> None:
 
     assert translate("display_hints_busy_status") in status.value
     assert display_mock.call_count == 2
+
+
+async def test_display_hints_button_retains_async_callback_until_completion() -> None:
+    """Async hint requests should keep their wrapper task alive until completion."""
+    set_hint_buttons_busy(False)
+    callback_started = asyncio.Event()
+    release_callback = asyncio.Event()
+
+    async def _callback(_exercise_id: str) -> bool:
+        callback_started.set()
+        await release_callback.wait()
+        return True
+
+    with patch("notebook_ta.notebook.display.ipydisplay.display") as display_mock:
+        display_hints_button("exercise-id", callback=_callback)
+
+    button, status = display_mock.call_args_list[1].args[0].children
+    button.click()
+
+    await callback_started.wait()
+    assert len(_BACKGROUND_TASKS) == 1
+    assert button.disabled is True
+    assert button.description == translate("display_hints_fetching")
+
+    release_callback.set()
+    await asyncio.gather(*list(_BACKGROUND_TASKS))
+
+    assert len(_BACKGROUND_TASKS) == 0
+    assert button.disabled is False
+    assert button.description == translate("display_hints_button")
+    assert status.value == ""
 
 
 def test_hint_buttons_can_be_disabled_and_restored_globally() -> None:

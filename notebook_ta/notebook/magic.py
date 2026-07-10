@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, cast
+from collections.abc import Awaitable, Coroutine
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from IPython.core.magic import Magics, cell_magic, magics_class
 
@@ -21,6 +22,7 @@ if TYPE_CHECKING:
     from notebook_ta.testing.runner import TestResult
 
 _log = get_logger("magic")
+_T = TypeVar("_T")
 
 
 @magics_class
@@ -42,7 +44,7 @@ class NotebookTAMagic(Magics):
         self._session = session
         self._runner = TestRunner()
         self._debug = debug
-        self._busy = False
+        self._background_tasks: set[asyncio.Task[Any]] = set()
 
     @cell_magic
     def notebook_ta(self, line: str, cell: str) -> None:
@@ -64,10 +66,7 @@ class NotebookTAMagic(Magics):
             display.display_unavailable_message(exercise_id)
             return
 
-        if not self._begin_operation():
-            display.display_busy_message()
-            return
-
+        display.set_hint_buttons_busy(True)
         try:
             # 2. Execute the student's code in the user namespace.
             cast(Any, self.shell.run_cell)(cell)
@@ -92,20 +91,7 @@ class NotebookTAMagic(Magics):
                     callback=lambda eid: self._hint_callback(eid, cell, results),
                 )
         finally:
-            self._end_operation()
-
-    def _begin_operation(self) -> bool:
-        """Reserve the magic instance for one notebook-ta operation if it is idle."""
-        if self._busy:
-            return False
-        self._busy = True
-        display.set_hint_buttons_busy(True)
-        return True
-
-    def _end_operation(self) -> None:
-        """Mark the magic instance as idle after a notebook-ta operation finishes."""
-        self._busy = False
-        display.set_hint_buttons_busy(False)
+            display.set_hint_buttons_busy(False)
 
     def _trigger_llm(
         self,
@@ -113,8 +99,8 @@ class NotebookTAMagic(Magics):
         student_code: str,
         results: list[TestResult],
         hint_history: list[HintExchange] | None,
-    ) -> str | None:
-        """Build a prompt and stream the LLM response, handling unavailability."""
+    ) -> Awaitable[str | None] | str | None:
+        """Build a prompt and schedule LLM response streaming."""
         if not self._llm.is_available():
             exercise = self._registry.get(exercise_id)
             display.display_no_llm_message(
@@ -136,59 +122,48 @@ class NotebookTAMagic(Magics):
         if self._debug:
             display.display_debug_prompt(prompt, call_type="analysis")
 
-        async def _run() -> str:
-            gen = self._llm.stream(prompt)
-            return await stream_to_output(gen)
+        async def _run() -> str | None:
+            try:
+                return await stream_to_output(self._llm.stream(prompt))
+            except Exception as exc:
+                _log.warning("LLM stream failed for exercise %r: %s", exercise_id, exc)
+                display.display_no_llm_message(exercise._global.prompts.on_no_llm)
+                return None
 
-        loop = asyncio.get_event_loop()
-        try:
-            full_response: str = loop.run_until_complete(_run())
-        except Exception as exc:
-            _log.warning("LLM stream failed for exercise %r: %s", exercise_id, exc)
-            display.display_no_llm_message(exercise._global.prompts.on_no_llm)
-            return None
-        return full_response
+        return self._schedule_coroutine(_run())
 
     def _hint_callback(
         self,
         exercise_id: str,
         student_code: str,
         test_results: list[TestResult],
-    ) -> bool:
+    ) -> Awaitable[bool | None] | bool | None:
         """Handle a hint button click: build hint prompt, stream, and save to history."""
-        if not self._begin_operation():
-            return False
+        exercise = self._registry.get(exercise_id)
+        hint_history = self._session.get_history(
+            exercise_id,
+            exercise._global.prompts.hint_history_length,
+        )
 
-        try:
-            exercise = self._registry.get(exercise_id)
-            hint_history = self._session.get_history(
-                exercise_id,
-                exercise._global.prompts.hint_history_length,
-            )
+        if not self._llm.is_available():
+            display.display_no_llm_message(exercise._global.prompts.on_no_llm)
+            return True
 
-            if not self._llm.is_available():
-                display.display_no_llm_message(exercise._global.prompts.on_no_llm)
-                return True
+        _log.debug("Hint requested for exercise %r", exercise_id)
+        prompt = exercise.build_prompt(
+            student_code=student_code,
+            test_results=test_results,
+            hint_history=hint_history if hint_history else [],
+        )
+        _log.debug(
+            "Sending hint prompt to LLM: exercise=%r, prompt_len=%d", exercise_id, len(prompt)
+        )
+        if self._debug:
+            display.display_debug_prompt(prompt, call_type="hint")
 
-            _log.debug("Hint requested for exercise %r", exercise_id)
-            prompt = exercise.build_prompt(
-                student_code=student_code,
-                test_results=test_results,
-                hint_history=hint_history if hint_history else [],
-            )
-            _log.debug(
-                "Sending hint prompt to LLM: exercise=%r, prompt_len=%d", exercise_id, len(prompt)
-            )
-            if self._debug:
-                display.display_debug_prompt(prompt, call_type="hint")
-
-            async def _run() -> str:
-                gen = self._llm.stream(prompt)
-                return await stream_to_output(gen)
-
-            loop = asyncio.get_event_loop()
+        async def _run() -> bool:
             try:
-                full_response: str = loop.run_until_complete(_run())
+                full_response = await stream_to_output(self._llm.stream(prompt))
             except Exception as exc:
                 _log.warning("Hint stream failed for exercise %r: %s", exercise_id, exc)
                 display.display_no_llm_message(exercise._global.prompts.on_no_llm)
@@ -199,8 +174,20 @@ class NotebookTAMagic(Magics):
                 HintExchange(student_code=student_code, hint_response=full_response),
             )
             return True
-        finally:
-            self._end_operation()
+
+        return self._schedule_coroutine(_run())
+
+    def _schedule_coroutine(self, coroutine: Coroutine[Any, Any, _T]) -> Awaitable[_T] | _T:
+        """Schedule *coroutine* without blocking an already-running event loop."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.get_event_loop()
+            return loop.run_until_complete(coroutine)
+        task = loop.create_task(coroutine)
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+        return task
 
 
 def load_ipython_extension(
