@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 
 from notebook_ta.config.models import (
@@ -159,11 +160,39 @@ class TestNamespaceInjection:
             == results[0].message
         )
 
-    def test_student_globals_injection(self) -> None:
-        td = TestDefinition(name="t", code=INLINE_STUDENT_GLOBALS_CODE)
+    def test_selected_student_symbols_injection(self) -> None:
+        td = TestDefinition(
+            name="t", code=INLINE_STUDENT_GLOBALS_CODE, student_symbols=["add"]
+        )
         ex = make_exercise([td])
-        ns = {"add": lambda a, b: a + b}
+        ns = {"add": lambda a, b: a + b, "unpicklable": threading.Lock()}
         results = make_runner().run(ex, ns)
+        assert results[0].passed is True
+
+    def test_student_globals_requires_explicit_export_configuration(self) -> None:
+        td = TestDefinition(name="t", code=INLINE_STUDENT_GLOBALS_CODE)
+        results = make_runner().run(make_exercise([td]), {"add": lambda a, b: a + b})
+
+        assert results[0].passed is False
+        assert "student_symbols" in (results[0].message or "")
+
+    def test_missing_selected_student_symbol_fails_gracefully(self) -> None:
+        td = TestDefinition(
+            name="t", code=INLINE_STUDENT_GLOBALS_CODE, student_symbols=["add"]
+        )
+        results = make_runner().run(make_exercise([td]), {})
+
+        assert results[0].passed is False
+        assert "add" in (results[0].message or "")
+
+    def test_full_student_globals_export_is_explicit(self) -> None:
+        td = TestDefinition(
+            name="t", code=INLINE_STUDENT_GLOBALS_CODE, export_student_globals=True
+        )
+        results = make_runner().run(
+            make_exercise([td]), {"add": lambda a, b: a + b}
+        )
+
         assert results[0].passed is True
 
 

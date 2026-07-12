@@ -258,6 +258,15 @@ class TestTestDefinitionValidation:
         with pytest.raises(ValidationError):
             TestDefinition(name="t", module="my.module")
 
+    def test_student_symbols_and_full_namespace_export_are_mutually_exclusive(self) -> None:
+        with pytest.raises(ValidationError):
+            TestDefinition(
+                name="t",
+                code="def f(student_globals): return True",
+                student_symbols=["answer"],
+                export_student_globals=True,
+            )
+
 
 # ---------------------------------------------------------------------------
 # Remote loading (mocked via pytest-httpx)
