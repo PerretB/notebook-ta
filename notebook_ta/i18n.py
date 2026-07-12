@@ -36,21 +36,48 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
             "`notebook_ta.load()` has been called with the correct exercises file."
         ),
         "hardware_detected": (
-            "**💻 Hardware detected** - auto-selecting LLM model:\n\n"
+            "**💻 notebook-ta Hardware detected** - auto-selecting LLM model:\n\n"
             "- RAM: {ram_gb:.1f} GB{gpu_text}\n"
             "- **Selected model:** `{model_name}` - {model_description}"
         ),
         "hardware_gpu_text": ", GPU: {gpu_name} ({vram_gb:.1f} GB VRAM)",
         "hardware_no_model": (
-            "**💻 Hardware auto-detection:** No suitable model found for your hardware.\n\n"
+            "**💻 notebook-ta Hardware auto-detection:** No suitable model found for your hardware.\n\n"
             "- RAM: {ram_gb:.1f} GB{gpu_text}\n\n"
             "The LLM provider will be marked as unavailable. Please configure a model "
             "manually in your `global_config.toml`."
+        ),
+        "initialization_title": "notebook-ta initialization",
+        "initialization_gpu": ", GPU: {gpu_name} ({vram_gb:.1f} GB VRAM)",
+        "initialization_hardware": (
+            "💻 Hardware detected: {ram_gb:.1f} GB RAM{gpu_text}. "
+            "Selected model: <code>{model_name}</code> — {model_description}"
+        ),
+        "initialization_no_model": (
+            "⚠️ Hardware detected: {ram_gb:.1f} GB RAM{gpu_text}. "
+            "No suitable model was found."
+        ),
+        "initialization_loaded": (
+            "✅ notebook-ta loaded — provider: <code>{provider}</code>, "
+            "model: <code>{model}</code>, {exercise_count} exercise(s) registered."
         ),
         "load_success": (
             "**✅ notebook-ta loaded.**  Provider: `{provider}` - Model: `{model}`  \n"
             "{exercise_count} exercise(s) registered."
         ),
+        "ollama_setup_checking_server": "Checking the local Ollama server…",
+        "ollama_setup_starting_server": "Ollama is not running — starting the server…",
+        "ollama_setup_server_failed": (
+            "❌ The local Ollama server could not be started. "
+            "LLM feedback will remain unavailable."
+        ),
+        "ollama_setup_checking_model": "Checking the selected Ollama model…",
+        "ollama_setup_pulling_model": "Downloading the selected Ollama model…",
+        "ollama_setup_model_failed": (
+            "❌ The selected Ollama model could not be downloaded. "
+            "LLM feedback will remain unavailable."
+        ),
+        "ollama_setup_ready": "✅ Local Ollama server and model are ready.",
         "runner_inline_function_missing": (
             "Function {function_name!r} not found in inline test code for {test_name!r}."
         ),
@@ -97,21 +124,48 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
             "Avez-vous appelé `notebook_ta.load()` ?"
         ),
         "hardware_detected": (
-            "**💻 Matériel détecté** - sélection automatique du modèle:\n\n"
+            "**💻 notebook-ta matériel détecté** - sélection automatique du modèle:\n\n"
             "- RAM : {ram_gb:.1f} Go{gpu_text}\n"
             "- **Modèle sélectionné :** `{model_name}` - {model_description}"
         ),
         "hardware_gpu_text": ", GPU : {gpu_name} ({vram_gb:.1f} Go VRAM)",
         "hardware_no_model": (
-            "**💻 Détection automatique du matériel :** aucun modèle adapté à votre "
+            "**💻 notebook-ta détection automatique du matériel :** aucun modèle adapté à votre "
             "matériel n'a été trouvé.\n\n"
             "- RAM : {ram_gb:.1f} Go{gpu_text}\n\n"
             "L'assistant LLM ne sera pas disponible."
+        ),
+        "initialization_title": "initialisation de notebook-ta",
+        "initialization_gpu": ", GPU : {gpu_name} ({vram_gb:.1f} Go VRAM)",
+        "initialization_hardware": (
+            "💻 Matériel détecté : {ram_gb:.1f} Go de RAM{gpu_text}. "
+            "Modèle sélectionné : <code>{model_name}</code> — {model_description}"
+        ),
+        "initialization_no_model": (
+            "⚠️ Matériel détecté : {ram_gb:.1f} Go de RAM{gpu_text}. "
+            "Aucun modèle adapté n'a été trouvé."
+        ),
+        "initialization_loaded": (
+            "✅ notebook-ta chargé — fournisseur : <code>{provider}</code>, "
+            "modèle : <code>{model}</code>, {exercise_count} exercice(s) enregistré(s)."
         ),
         "load_success": (
             "**✅ notebook-ta chargé:**  Fournisseur : `{provider}` - Modèle : `{model}`  \n"
             "{exercise_count} exercice(s) enregistre(s)."
         ),
+        "ollama_setup_checking_server": "Vérification du serveur Ollama local…",
+        "ollama_setup_starting_server": "Ollama n'est pas lancé — démarrage du serveur…",
+        "ollama_setup_server_failed": (
+            "❌ Le serveur Ollama local n'a pas pu être démarré. "
+            "Les retours du LLM resteront indisponibles."
+        ),
+        "ollama_setup_checking_model": "Vérification du modèle Ollama sélectionné…",
+        "ollama_setup_pulling_model": "Téléchargement du modèle Ollama sélectionné…",
+        "ollama_setup_model_failed": (
+            "❌ Le modèle Ollama sélectionné n'a pas pu être téléchargé. "
+            "Les retours du LLM resteront indisponibles."
+        ),
+        "ollama_setup_ready": "✅ Le serveur Ollama local et le modèle sont prêts.",
         "runner_inline_function_missing": (
             "Fonction {function_name!r} introuvable dans le test unitaire de l'exercice "
             "{test_name!r}."

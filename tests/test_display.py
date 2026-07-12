@@ -13,6 +13,8 @@ from notebook_ta.notebook.display import (
     _BACKGROUND_TASKS,
     display_busy_message,
     display_hints_button,
+    display_initialization,
+    display_ollama_setup,
     display_test_results,
     format_llm_answer_markdown,
     format_llm_waiting_markdown,
@@ -220,3 +222,46 @@ def test_display_busy_message_uses_configured_language() -> None:
     rendered = display_mock.call_args.args[0]
     assert isinstance(rendered, ipydisplay.Markdown)
     assert translate("display_busy", language="fr") in rendered.data
+
+
+def test_display_ollama_setup_updates_spinner_and_escapes_detail() -> None:
+    """Ollama setup should show activity safely and settle on a final status."""
+    with patch("notebook_ta.notebook.display.ipydisplay.display") as display_mock:
+        update = display_ollama_setup()
+
+    status = display_mock.call_args.args[0]
+    assert "notebook-ta-spinner" in status.value
+    update("pulling_model", "pulling <manifest>")
+    assert "&lt;manifest&gt;" in status.value
+    assert "notebook-ta-spinner" in status.value
+
+    update("ready")
+    assert translate("ollama_setup_ready") in status.value
+    assert "notebook-ta-spinner" not in status.value
+
+
+def test_initialization_display_uses_llm_answer_style_and_one_display_handle() -> None:
+    """Initialization should reuse the LLM-answer Markdown presentation in place."""
+    with patch("notebook_ta.notebook.display.ipydisplay.display") as display_mock:
+        initialization = display_initialization()
+
+    initial = display_mock.call_args.args[0]
+    assert isinstance(initial, ipydisplay.Markdown)
+    assert display_mock.call_args.kwargs["display_id"] is True
+    assert "background: rgba(20, 184, 166, 0.14)" in initial.data
+    assert "border-left: 4px solid #14b8a6" in initial.data
+    assert "border-radius: 6px" in initial.data
+    assert "color: inherit" in initial.data
+
+    initialization.show_hardware(16.0, "GPU <name>", 8.0, "model<1>", "Fast & local")
+    initialization.update_ollama("pulling_model", "pulling <manifest>")
+    initialization.show_loaded("ollama", "model<1>", 3)
+
+    assert display_mock.return_value.update.call_count == 3
+    content = display_mock.return_value.update.call_args.args[0].data
+    assert translate("initialization_title") in content
+    assert "GPU &lt;name&gt;" in content
+    assert "model&lt;1&gt;" in content
+    assert "pulling &lt;manifest&gt;" in content
+    assert translate("ollama_setup_pulling_model") in content
+    assert "3 exercise(s) registered" in content

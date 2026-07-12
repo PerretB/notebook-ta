@@ -86,45 +86,58 @@ class TestOllamaProvider:
             provider = OllamaProvider("http://remote-host:11434", "llama3.2:3b", 30)
             assert provider.is_available() is False
 
-    def test_is_available_starts_server_on_localhost(self) -> None:
-        mock_list = self._make_list_response("llama3.2:3b")
+    def test_is_available_does_not_start_server_on_localhost(self) -> None:
         with patch("notebook_ta.llm.ollama.ollama.Client") as mock_cls:
-            mock_client = mock_cls.return_value
-            # CALL 1: initial check fails; CALL 2: poll in _try_start_server; CALL 3: _ensure_model
-            mock_client.list.side_effect = [
-                Exception("Connection refused"),
-                mock_list,
-                mock_list,
-            ]
+            mock_cls.return_value.list.side_effect = Exception("Connection refused")
             with patch("notebook_ta.llm.ollama.subprocess.Popen") as mock_popen:
-                with patch("notebook_ta.llm.ollama.time.sleep"):
-                    provider = OllamaProvider("http://localhost:11434", "llama3.2:3b", 30)
-                    result = provider.is_available()
-        assert result is True
-        mock_popen.assert_called_once()
-
-    def test_is_available_false_when_server_start_fails(self) -> None:
-        with patch("notebook_ta.llm.ollama.ollama.Client") as mock_cls:
-            mock_cls.return_value.list.side_effect = Exception("refused")
-            with patch(
-                "notebook_ta.llm.ollama.subprocess.Popen",
-                side_effect=FileNotFoundError,
-            ):
                 provider = OllamaProvider("http://localhost:11434", "llama3.2:3b", 30)
                 assert provider.is_available() is False
+        mock_popen.assert_not_called()
 
-    def test_is_available_pulls_missing_model(self) -> None:
-        mock_list = self._make_list_response()  # no models available
+    def test_is_available_false_when_model_is_missing(self) -> None:
+        with patch("notebook_ta.llm.ollama.ollama.Client") as mock_cls:
+            mock_cls.return_value.list.return_value = self._make_list_response()
+            provider = OllamaProvider("http://localhost:11434", "llama3.2:3b", 30)
+            assert provider.is_available() is False
+
+    def test_setup_local_starts_server_and_pulls_missing_model(self) -> None:
+        missing_model = self._make_list_response()
+        installed_model = self._make_list_response("llama3.2:3b")
         mock_progress = MagicMock()
         mock_progress.status = "pulling manifest"
         with patch("notebook_ta.llm.ollama.ollama.Client") as mock_cls:
             mock_client = mock_cls.return_value
-            mock_client.list.return_value = mock_list
+            mock_client.list.side_effect = [
+                Exception("Connection refused"),
+                missing_model,
+                installed_model,
+            ]
             mock_client.pull.return_value = iter([mock_progress])
             provider = OllamaProvider("http://localhost:11434", "llama3.2:3b", 30)
-            result = provider.is_available()
+            statuses: list[tuple[str, str | None]] = []
+            with patch.object(provider, "_try_start_server", return_value=True) as start:
+                result = provider._setup_local(lambda state, detail: statuses.append((state, detail)))
         assert result is True
+        start.assert_called_once_with()
         mock_client.pull.assert_called_once_with("llama3.2:3b", stream=True)
+        assert statuses == [
+            ("checking_server", None),
+            ("starting_server", None),
+            ("checking_model", None),
+            ("pulling_model", None),
+            ("pulling_model", "pulling manifest"),
+            ("ready", None),
+        ]
+
+    def test_setup_local_reports_server_start_failure(self) -> None:
+        with patch("notebook_ta.llm.ollama.ollama.Client") as mock_cls:
+            mock_cls.return_value.list.side_effect = Exception("Connection refused")
+            provider = OllamaProvider("http://localhost:11434", "llama3.2:3b", 30)
+            statuses: list[tuple[str, str | None]] = []
+            with patch.object(provider, "_try_start_server", return_value=False):
+                result = provider._setup_local(lambda state, detail: statuses.append((state, detail)))
+        assert result is False
+        assert statuses[-1] == ("server_failed", None)
 
     @pytest.mark.asyncio
     async def test_stream_yields_chunks(self) -> None:
