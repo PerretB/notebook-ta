@@ -26,6 +26,28 @@ _LLM_ANSWER_STYLE = (
     "color: inherit"
 )
 
+_LLM_WAITING_INDICATOR = """
+<style>
+@keyframes notebook-ta-spin {
+    to { transform: rotate(360deg); }
+}
+.notebook-ta-spinner {
+    display: inline-block;
+    width: 0.9em;
+    height: 0.9em;
+    border: 0.15em solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: notebook-ta-spin 0.75s linear infinite;
+    vertical-align: -0.1em;
+}
+@media (prefers-reduced-motion: reduce) {
+    .notebook-ta-spinner { animation-duration: 1.5s; }
+}
+</style>
+<span class="notebook-ta-spinner" role="status" aria-label="Waiting for LLM response"></span>
+""".strip()
+
 _HINT_BUTTON_STYLE = """
 <style>
 .jp-OutputArea-output:has(.notebook-ta-hints),
@@ -126,6 +148,11 @@ def format_llm_answer_markdown(answer: str) -> str:
         f'<div style="{_LLM_ANSWER_STYLE}">\n\n'
         f'{translate("display_llm_answer_prefix")}: {answer}\n\n</div>'
     )
+
+
+def format_llm_waiting_markdown() -> str:
+    """Render the LLM answer block with an animated waiting indicator."""
+    return format_llm_answer_markdown(_LLM_WAITING_INDICATOR)
 
 
 def display_success() -> None:
