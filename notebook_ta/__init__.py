@@ -3,21 +3,25 @@
 from __future__ import annotations
 
 import contextlib
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any
 
 import nest_asyncio
 
 from notebook_ta.config.loader import load_exercises, load_global
 from notebook_ta.config.models import ConfigurationError, GlobalConfig, LLMConfig
 from notebook_ta.exercise.definition import Exercise
-from notebook_ta.i18n import set_language, translate
+from notebook_ta.i18n import set_language
 from notebook_ta.exercise.registry import ExerciseRegistry
 from notebook_ta.llm.base import LLMProvider, create_provider
 from notebook_ta.logging import get_logger, setup_logging
 from notebook_ta.notebook.extractor import detect_notebook_path, extract_statements
 from notebook_ta.notebook.magic import load_ipython_extension
 from notebook_ta.notebook.session import SessionState
+
+if TYPE_CHECKING:
+    from notebook_ta.notebook.display import InitializationDisplay
 
 # Module-level singletons updated on each call to load()
 _registry: ExerciseRegistry = ExerciseRegistry()
@@ -66,10 +70,11 @@ def load(
     setup_logging(debug=debug)
 
     # 1. Load and validate configuration
-    _log.info("Loading notebook-ta configuration")
+    _log.debug("Loading notebook-ta configuration")
     cfg = load_global(global_config)
     set_language(cfg.language)
     exercise_configs = load_exercises(exercises_config)
+    initialization = _create_initialization_display()
 
     # 1b. Apply programmatic LLM overrides (validated through Pydantic)
     if llm_overrides:
@@ -81,17 +86,18 @@ def load(
 
     # 2. Auto-setup wizard
     if cfg.llm.model == "auto":
-        _run_setup_wizard(cfg)
+        _run_setup_wizard(cfg, initialization)
 
     # 3. Create LLM provider
     provider = create_provider(cfg.llm)
-    _log.info("LLM provider created: %r (model=%r)", cfg.llm.provider, cfg.llm.model)
+    _log.debug("LLM provider created: %r (model=%r)", cfg.llm.provider, cfg.llm.model)
+    _setup_local_ollama(provider, initialization)
 
     # 4. Resolve missing statements from the notebook file
     missing = [ex for ex in exercise_configs if ex.statement is None]
     if missing:
         nb_path = Path(notebook_path) if notebook_path is not None else _resolve_notebook_path()
-        _log.info("Extracting %d statement(s) from notebook: %s", len(missing), nb_path)
+        _log.debug("Extracting %d statement(s) from notebook: %s", len(missing), nb_path)
         extracted = extract_statements(nb_path)
         for ex_cfg in missing:
             text = extracted.get(ex_cfg.id)
@@ -108,7 +114,7 @@ def load(
         registry.register(Exercise(config=ex_cfg, global_config=cfg))
 
     session = SessionState(hint_history_length=cfg.prompts.hint_history_length)
-    _log.info("Registry populated: %d exercise(s)", len(exercise_configs))
+    _log.debug("Registry populated: %d exercise(s)", len(exercise_configs))
 
     # 6. Register the IPython magic
     try:
@@ -139,23 +145,13 @@ def load(
     _registry = registry
     _llm_provider = provider
     _global_config = cfg
-    _log.info("notebook-ta loaded successfully")
+    _log.debug("notebook-ta loaded successfully")
 
-    from IPython import display as ipydisplay
-
-    with contextlib.suppress(Exception):
-        cast(Any, ipydisplay.display)(
-            cast(Any, ipydisplay.Markdown)(
-                translate(
-                    "load_success",
-                    {
-                        "provider": cfg.llm.provider,
-                        "model": cfg.llm.model,
-                        "exercise_count": len(exercise_configs),
-                    },
-                )
+    if initialization is not None:
+        with contextlib.suppress(Exception):
+            initialization.show_loaded(
+                cfg.llm.provider, cfg.llm.model, len(exercise_configs)
             )
-        )
 
 
 def get_registry() -> ExerciseRegistry:
@@ -188,53 +184,52 @@ def _resolve_notebook_path() -> Path:
     return path
 
 
-def _run_setup_wizard(cfg: GlobalConfig) -> None:
+def _create_initialization_display() -> InitializationDisplay | None:
+    """Create the shared initialization panel when notebook display is available."""
+    from notebook_ta.notebook.display import display_initialization
+
+    try:
+        return display_initialization()
+    except Exception:
+        return None
+
+
+def _setup_local_ollama(
+    provider: LLMProvider, initialization: InitializationDisplay | None = None
+) -> None:
+    """Prepare a localhost Ollama server and model during package loading."""
+    from notebook_ta.llm.ollama import OllamaProvider
+
+    if not isinstance(provider, OllamaProvider) or not provider._is_localhost():
+        return
+
+    update_status: Callable[[str, str | None], None]
+    if initialization is None:
+        def update_status(_state: str, _detail: str | None = None) -> None:
+            """Ignore setup status when notebook display is unavailable."""
+    else:
+        update_status = initialization.update_ollama
+
+    provider._setup_local(update_status)
+
+
+def _run_setup_wizard(
+    cfg: GlobalConfig, initialization: InitializationDisplay | None = None
+) -> None:
     """Run hardware detection and update cfg.llm.model in place."""
     from notebook_ta.setup_wizard.detector import detect_hardware, select_model
 
     profile = detect_hardware()
     model_spec = select_model(cfg.llm.available_models, profile)
 
-    try:
-        from IPython import display as ipydisplay
-
-        if model_spec is not None:
-            cfg.llm.model = model_spec.name
-            gpu_text = (
-                translate(
-                    "hardware_gpu_text",
-                    {"gpu_name": profile.gpu_name, "vram_gb": profile.vram_gb},
-                )
-                if profile.gpu_name
-                else ""
+    if model_spec is not None:
+        cfg.llm.model = model_spec.name
+    if initialization is not None:
+        with contextlib.suppress(Exception):
+            initialization.show_hardware(
+                profile.ram_gb,
+                profile.gpu_name,
+                profile.vram_gb,
+                model_spec.name if model_spec is not None else None,
+                model_spec.description if model_spec is not None else None,
             )
-            cast(Any, ipydisplay.display)(
-                cast(Any, ipydisplay.Markdown)(
-                    translate(
-                        "hardware_detected",
-                        {
-                            "ram_gb": profile.ram_gb,
-                            "gpu_text": gpu_text,
-                            "model_name": model_spec.name,
-                            "model_description": model_spec.description,
-                        },
-                    )
-                )
-            )
-        else:
-            gpu_text = (
-                translate(
-                    "hardware_gpu_text",
-                    {"gpu_name": profile.gpu_name, "vram_gb": profile.vram_gb},
-                )
-                if profile.gpu_name
-                else ""
-            )
-            cast(Any, ipydisplay.display)(
-                cast(Any, ipydisplay.Markdown)(
-                    translate("hardware_no_model", {"ram_gb": profile.ram_gb, "gpu_text": gpu_text})
-                )
-            )
-    except Exception:
-        if model_spec is not None:
-            cfg.llm.model = model_spec.name

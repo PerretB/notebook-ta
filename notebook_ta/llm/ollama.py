@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import subprocess
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 _log = get_logger("llm.ollama")
 
 _SERVER_START_TIMEOUT = 15  # seconds to wait after launching `ollama serve`
-_SERVER_POLL_INTERVAL = 1  # seconds between readiness polls
+_SERVER_POLL_INTERVAL = 0.5  # seconds between readiness polls
 
 
 class OllamaProvider(LLMProvider):
@@ -67,41 +67,57 @@ class OllamaProvider(LLMProvider):
                 continue
         return False
 
-    def _ensure_model(self, client: ollama.Client) -> None:
-        """Pull the configured model if it is not already present locally."""
+    def _list_models(self, client: ollama.Client) -> set[str]:
+        """Return the model names reported by an Ollama client."""
+        return {model.model for model in client.list().models if model.model is not None}
+
+    def _pull_model(self, client: ollama.Client, on_progress: Callable[[str], None]) -> bool:
+        """Pull the configured model and report progress status updates."""
         try:
-            available = {m.model for m in client.list().models}
-            if self._model not in available:
-                print(f"[notebook-ta] Model '{self._model}' not found — pulling…")
-                for progress in client.pull(self._model, stream=True):
-                    if progress.status:
-                        print(f"\r[notebook-ta] {progress.status}", end="", flush=True)
-                print()  # newline after last progress line
+            for progress in client.pull(self._model, stream=True):
+                if progress.status:
+                    on_progress(progress.status)
+            return self._model in self._list_models(client)
+        except Exception as exc:
+            _log.warning("Failed to pull Ollama model %r: %s", self._model, exc)
+            return False
+
+    def _setup_local(self, on_status: Callable[[str, str | None], None]) -> bool:
+        """Start local Ollama if needed and ensure the configured model is installed."""
+        client = ollama.Client(host=self._base_url, timeout=5)
+        on_status("checking_server", None)
+        try:
+            models = self._list_models(client)
         except Exception:
-            pass  # best-effort; generation will fail gracefully if the model is missing
+            on_status("starting_server", None)
+            if not self._try_start_server():
+                on_status("server_failed", None)
+                return False
+            try:
+                models = self._list_models(client)
+            except Exception:
+                on_status("server_failed", None)
+                return False
+
+        on_status("checking_model", None)
+        if self._model not in models:
+            on_status("pulling_model", None)
+            if not self._pull_model(
+                client, lambda detail: on_status("pulling_model", detail)
+            ):
+                on_status("model_failed", None)
+                return False
+        on_status("ready", None)
+        return True
 
     def is_available(self) -> bool:
-        """Return True if the Ollama server is ready and the model is available.
-
-        For localhost deployments, attempts to start the server when it is not
-        running and pulls the configured model if it has not been downloaded yet.
-        """
+        """Return True if the Ollama server responds and the configured model exists."""
         client = ollama.Client(host=self._base_url, timeout=5)
         try:
-            client.list()
+            return self._model in self._list_models(client)
         except Exception:
-            if not self._is_localhost():
-                _log.warning("Ollama server not reachable at %r", self._base_url)
-                return False
-            print(
-                "[notebook-ta] Ollama server not running — starting and loading model, "
-                "please wait…"
-            )
-            if not self._try_start_server():
-                _log.warning("Failed to start Ollama server at %r", self._base_url)
-                return False
-        self._ensure_model(client)
-        return True
+            _log.warning("Ollama server not reachable at %r", self._base_url)
+            return False
 
     async def query(self, prompt: str) -> str:
         """Send a prompt and accumulate the full response."""

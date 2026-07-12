@@ -31,6 +31,14 @@ Both files can be loaded from a **local path** or an **`https://` URL**.
 | `temperature` | float | `0.7` | Sampling temperature (0.0 = deterministic, higher = more creative) |
 | `streaming` | boolean | `true` | Enable streaming responses |
 
+When the provider is `ollama` and `base_url` points to localhost, `notebook_ta.load()` checks that
+the Ollama server is running and starts it when necessary. It then checks the selected model and
+downloads it when missing. Progress is shown directly in the notebook. Remote Ollama servers are
+only checked and are never started or modified.
+
+Hardware auto-detection, Ollama setup progress, and the final loaded summary are grouped in one
+rounded **notebook-ta initialization** panel with a subtle theme-friendly background.
+
 #### `[[llm.available_models]]` — Auto-selection Candidates
 
 Used only when `model = "auto"`. The system selects the model with the highest `min_ram_gb` whose

@@ -232,7 +232,13 @@ Dispatches on `config.provider`. Raises `ValueError` for unknown provider names.
 - Uses `httpx.AsyncClient` to POST to `/api/generate` on the configured `base_url`
 - Sets `stream=true` in the request body
 - Parses the NDJSON response line-by-line, yielding the `response` field from each JSON object
-- `is_available()`: synchronous GET to `/api/tags`; returns `False` on any connection error
+- `is_available()`: performs a read-only synchronous model-list request; returns `True` only when
+  the server responds and the configured model is installed.
+- During `notebook_ta.load()`, localhost Ollama providers are prepared after model selection: the
+  server is started when unreachable, then the selected model is pulled when missing. A live
+  notebook status panel displays each step and streamed pull status. Hardware selection, Ollama
+  setup, and the final loaded summary share one Markdown display handle styled exactly like LLM
+  answers and updated in place. Remote Ollama hosts are never started or modified.
 
 ### 4.3 OpenAICompatProvider (`llm/openai_compat.py`)
 
@@ -536,8 +542,10 @@ def get_registry() -> ExerciseRegistry:
 2. Load and validate both TOML files via `ConfigLoader`
 3. If `llm.model == "auto"`: run setup wizard, display result, update `LLMConfig.model`
 4. Create the LLM provider via `create_provider()`
-5. Populate the `ExerciseRegistry`
-6. Register `%%notebook_ta` magic via `load_ipython_extension()`
+5. For a localhost Ollama provider, ensure the server and selected model are ready while displaying
+   live progress; setup failures degrade gracefully and leave the provider unavailable
+6. Populate the `ExerciseRegistry`
+7. Register `%%notebook_ta` magic via `load_ipython_extension()`
 
 Calling `load()` a second time replaces the existing configuration and re-registers the magic.
 
@@ -633,6 +641,12 @@ sequenceDiagram
     end
     API->>LLM: create_provider(llm_config)
     LLM-->>API: LLMProvider instance
+    alt localhost Ollama
+        API->>NB: display live setup status
+        API->>LLM: start server if needed
+        API->>LLM: pull selected model if needed
+        LLM-->>NB: update progress and final status
+    end
     API->>REG: register_all(exercises)
     API->>MAG: load_ipython_extension(ip)
 ```

@@ -155,6 +155,124 @@ def format_llm_waiting_markdown() -> str:
     return format_llm_answer_markdown(_LLM_WAITING_INDICATOR)
 
 
+class InitializationDisplay:
+    """Render all initialization updates through one Markdown display handle."""
+
+    def __init__(self) -> None:
+        """Create the shared display using the exact LLM-answer presentation."""
+        self._rows: dict[str, str] = {}
+        self._handle = cast(Any, ipydisplay.display)(
+            cast(Any, ipydisplay.Markdown)(self._format()),
+            display_id=True,
+        )
+
+    def _format(self) -> str:
+        """Format the panel with the same inline style used for LLM answers."""
+        title = html.escape(translate("initialization_title"))
+        rows = "".join(
+            f'<div style="margin: 0.2em 0">{row}</div>' for row in self._rows.values()
+        )
+        return (
+            f'<div style="{_LLM_ANSWER_STYLE}">\n\n'
+            f"<strong>{title}</strong>{rows}\n\n</div>"
+        )
+
+    def _render(self) -> None:
+        """Refresh the combined status content in place."""
+        if self._handle is not None:
+            self._handle.update(cast(Any, ipydisplay.Markdown)(self._format()))
+
+    def show_hardware(
+        self,
+        ram_gb: float,
+        gpu_name: str | None,
+        vram_gb: float,
+        model_name: str | None,
+        model_description: str | None,
+    ) -> None:
+        """Add the hardware detection and model-selection result."""
+        gpu = (
+            translate(
+                "initialization_gpu",
+                {"gpu_name": html.escape(gpu_name), "vram_gb": vram_gb},
+            )
+            if gpu_name
+            else ""
+        )
+        key = "initialization_hardware" if model_name is not None else "initialization_no_model"
+        values = {"ram_gb": ram_gb, "gpu_text": gpu}
+        if model_name is not None:
+            values.update(
+                {
+                    "model_name": html.escape(model_name),
+                    "model_description": html.escape(model_description or ""),
+                }
+            )
+        self._rows["hardware"] = translate(key, values)
+        self._render()
+
+    def update_ollama(self, state: str, detail: str | None = None) -> None:
+        """Update the Ollama initialization row."""
+        running_states = {
+            "checking_server",
+            "starting_server",
+            "checking_model",
+            "pulling_model",
+        }
+        message = translate(f"ollama_setup_{state}")
+        if detail:
+            message = f"{message} <small>({html.escape(detail)})</small>"
+        spinner = f"{_LLM_WAITING_INDICATOR} " if state in running_states else ""
+        self._rows["ollama"] = f"{spinner}{message}"
+        self._render()
+
+    def show_loaded(self, provider: str, model: str, exercise_count: int) -> None:
+        """Add the final successfully-loaded summary."""
+        self._rows["loaded"] = translate(
+            "initialization_loaded",
+            {
+                "provider": html.escape(provider),
+                "model": html.escape(model),
+                "exercise_count": exercise_count,
+            },
+        )
+        self._render()
+
+
+def display_initialization() -> InitializationDisplay:
+    """Display and return the shared notebook-ta initialization panel."""
+    return InitializationDisplay()
+
+
+def display_ollama_setup() -> Callable[[str, str | None], None]:
+    """Show a standalone Ollama setup panel and return its update callback."""
+    import ipywidgets as widgets
+
+    status = widgets.HTML()
+    running_states = {
+        "checking_server",
+        "starting_server",
+        "checking_model",
+        "pulling_model",
+    }
+
+    def update(state: str, detail: str | None = None) -> None:
+        """Update the setup panel with a localized state and optional backend detail."""
+        message = translate(f"ollama_setup_{state}")
+        if detail:
+            message = f"{message} <small>({html.escape(detail)})</small>"
+        spinner = f"{_LLM_WAITING_INDICATOR} " if state in running_states else ""
+        status.value = (
+            '<div style="padding: 0.65em 0.85em; border-left: 4px solid #14b8a6; '
+            'background: rgba(20, 184, 166, 0.10); border-radius: 6px">'
+            f"{spinner}{message}</div>"
+        )
+
+    update("checking_server")
+    cast(Any, ipydisplay.display)(status)
+    return update
+
+
 def display_success() -> None:
     """Show a 'tests passed' indicator before streaming begins."""
     cast(Any, ipydisplay.display)(cast(Any, ipydisplay.Markdown)(translate("display_success")))
