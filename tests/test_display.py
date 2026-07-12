@@ -15,6 +15,7 @@ from notebook_ta.notebook.display import (
     display_hints_button,
     display_test_results,
     format_llm_answer_markdown,
+    format_llm_waiting_markdown,
     set_hint_buttons_busy,
 )
 from notebook_ta.testing.runner import TestResult as RunnerResult
@@ -68,6 +69,15 @@ def test_format_llm_answer_markdown_wraps_answer() -> None:
     assert "color: inherit" in rendered
     assert f"{translate('display_llm_answer_prefix')}: Nice work." in rendered
     assert rendered.endswith("</div>")
+
+
+def test_format_llm_waiting_markdown_contains_animated_spinner() -> None:
+    """The initial LLM answer block should communicate that work is in progress."""
+    rendered = format_llm_waiting_markdown()
+
+    assert "notebook-ta-spinner" in rendered
+    assert "@keyframes notebook-ta-spin" in rendered
+    assert 'role="status"' in rendered
 
 
 def test_display_busy_message_renders_retry_guidance() -> None:

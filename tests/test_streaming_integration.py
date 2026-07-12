@@ -146,6 +146,7 @@ class TestStreamingIntegration:
         first_display = mock_ipydisplay.call_args.args[0]
         assert isinstance(first_display, ipydisplay.Markdown)
         assert "background: rgba(20, 184, 166, 0.14)" in first_display.data
+        assert "notebook-ta-spinner" in first_display.data
 
         final_update = mock_handle.update.call_args.args[0]
         assert isinstance(final_update, ipydisplay.Markdown)
@@ -153,3 +154,23 @@ class TestStreamingIntegration:
 
         # Verify no duplicate displays
         assert mock_ipydisplay.call_count == 1
+
+    @patch("IPython.display.display")
+    def test_stream_to_output_removes_spinner_when_stream_is_empty(
+        self, mock_ipydisplay: MagicMock
+    ) -> None:
+        """A provider that yields no chunks should not leave a spinner running forever."""
+        from notebook_ta.notebook.streaming import stream_to_output
+
+        mock_handle = MagicMock()
+        mock_ipydisplay.return_value = mock_handle
+
+        async def empty_stream() -> AsyncIterator[str]:
+            if False:
+                yield "unreachable"
+
+        asyncio.run(stream_to_output(empty_stream()))
+
+        final_update = mock_handle.update.call_args.args[0]
+        assert isinstance(final_update, ipydisplay.Markdown)
+        assert "notebook-ta-spinner" not in final_update.data
