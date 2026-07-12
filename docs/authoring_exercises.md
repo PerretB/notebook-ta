@@ -41,30 +41,23 @@ def test_add(add):
 """
 ```
 
-The test function receives the student's symbol by parameter name.  
+The runner inspects the test function's signature and resolves every parameter name in the
+student's IPython namespace. In this example, the `add` parameter receives the object stored under
+the name `add`. Multiple parameters are resolved independently in the same way.
+
+Resolution happens before the test is called. If any parameter name is absent from the student's
+namespace, the test is not executed and is reported as failed with a message identifying the
+missing name. The reserved `student_globals` parameter follows the explicit export rules in
+[Passing student symbols to tests](#passing-student-symbols-to-tests) instead.
+
 It must return either:
+
 - A `bool` (`True` = pass, `False` = fail)
 - A `tuple[bool, str]` where the string is a human-readable message
 
 Any text printed to stdout is also captured and included in the message. Common ANSI SGR color and
 text-style sequences (including standard and bright colors, bold, and underline) are rendered in
 the notebook output, so existing terminal-style custom test reports remain readable.
-
-### Using `student_globals`
-
-If your parameter is named `student_globals`, the entire student namespace (IPython `user_ns`) is
-passed as that argument — useful when the student's code defines multiple names:
-
-```toml
-[[exercises.ex2.tests]]
-name = "Both functions are defined"
-code = """
-def test_both_defined(student_globals):
-    has_add = "add" in student_globals and callable(student_globals["add"])
-    has_mul = "mul" in student_globals and callable(student_globals["mul"])
-    return has_add and has_mul, "Expected both add() and mul() to be defined."
-"""
-```
 
 ### External Tests
 
@@ -77,7 +70,58 @@ module = "course_tests.ex3"
 function = "test_performance"
 ```
 
-The module must be importable from the notebook's working directory or `PYTHONPATH`.
+For example, `course_tests/ex3.py` could contain:
+
+```python
+def test_performance(build_index):
+    index = build_index(["alpha", "beta"])
+    return len(index) == 2, "Expected an index containing both values."
+```
+
+The module must be importable from the notebook's working directory or `PYTHONPATH`. After loading
+the configured function, the runner resolves its parameters exactly as it does for an inline test:
+each parameter name is looked up in the student's IPython namespace. If any name is missing, the
+function is not called and the test is reported as failed with the missing name. The reserved
+`student_globals` parameter uses the shared rules below.
+
+### Passing student symbols to tests
+
+The following rules apply to both inline and external tests. Put `student_symbols` or
+`export_student_globals` in the test's TOML table alongside either `code` or `module`/`function`.
+
+#### Named parameters
+
+Named parameters are the preferred way to pass student definitions to a test. Only the requested
+objects are serialized for the isolated test process. For example, a function declared as
+`def test_result(parse, render): ...` receives the student's `parse` and `render` objects. The test
+fails before invocation if either name is not defined.
+
+#### Exporting multiple symbols as a dictionary
+
+When a test needs a dictionary of several student definitions, declare `student_symbols`. The
+runner exports only those names and passes the resulting dictionary as `student_globals`:
+
+```toml
+[[exercises.ex2.tests]]
+name = "Both functions are defined"
+student_symbols = ["add", "mul"]
+code = """
+def test_both_defined(student_globals):
+    has_add = "add" in student_globals and callable(student_globals["add"])
+    has_mul = "mul" in student_globals and callable(student_globals["mul"])
+    return has_add and has_mul, "Expected both add() and mul() to be defined."
+"""
+```
+
+A missing selected symbol is reported as a failed test. A test that declares a
+`student_globals` parameter without either export option also fails with a configuration message.
+
+The full IPython namespace can be exported explicitly with
+`export_student_globals = true`, but this is strongly discouraged. Notebook namespaces commonly
+contain large objects, open resources, module state, or objects that `cloudpickle` cannot serialize.
+Exporting all of them can therefore make tests slow or cause process preparation to fail even when
+the objects relevant to the test are valid. Use named parameters or `student_symbols` whenever
+possible.
 
 ### Unit Test Timeouts
 
@@ -194,5 +238,5 @@ def test_no_mutation(reverse_list):
 - Keep test names short and descriptive — they appear in the notebook output.
 - Return a meaningful message from your tests to help students understand failures.
 - Use `print()` inside test functions to emit additional diagnostic information.
-- Use `student_globals` when you need to check that multiple names are defined.
+- Prefer named test parameters; use `student_symbols` only when the test needs a dictionary.
 - External module tests are useful for complex or reusable test logic shared across exercises.

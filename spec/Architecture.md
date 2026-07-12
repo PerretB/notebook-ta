@@ -133,9 +133,12 @@ Describes a single LLM model option and its hardware requirements.
 | `code`     | `str \| None` | Inline Python function source (multiline string)          |
 | `module`   | `str \| None` | Dotted module path for an external test function          |
 | `function` | `str \| None` | Function name within the external module                  |
+| `student_symbols` | `list[str] \| None` | Selected namespace symbols exported as a dictionary |
+| `export_student_globals` | `bool` | Explicitly export the full student namespace |
 
 Exactly one of (`code`) or (`module` + `function`) must be provided. Enforced by a Pydantic model
 validator.
+The two namespace export fields are mutually exclusive.
 
 #### `ExerciseConfig`
 
@@ -324,8 +327,11 @@ For each test:
 Test functions receive student code in one of two ways, determined by `inspect.signature()` at call
 time:
 
-- **If any parameter is named `student_globals`** — the full IPython `user_ns` dict is passed as
-  that argument
+- **If a parameter is named `student_globals` and `student_symbols` is configured** — only those
+  selected entries from `user_ns` are passed in a dictionary
+- **If a parameter is named `student_globals` and `export_student_globals` is enabled** — the full
+  `user_ns` dictionary is passed explicitly; this is discouraged because serialization may be
+  large or fail for unrelated notebook objects
 - **Otherwise** — each parameter name is looked up by name in `user_ns`; a missing symbol is caught
   and reported as a failed test with a descriptive message
 

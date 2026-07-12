@@ -9,7 +9,11 @@ Detailed architecture: [Architecture.md](Architecture.md)
 - Doc strings are required on all public functions and class methods
 - Update Documentation in `docs/` for any public API changes
 - Update dependencies in `pyproject.toml` if new packages are added to the project
-- Update developer documentation for any architecture changes (see [Architecture.md](Architecture.md))
+- Update developer documentation for any architecture changes, see:
+   - Project functional specification [PROJECT.md](spec/PROJECT.md)
+   - Project architecture specification [Architecture.md](spec/Architecture.md)
+   - Cli benchmarking tool functional specification [PromptBenchmarking.md](spec/PromptBenchmarking.md)
+   - Cli benchmarking tool architecture specification [PromptBenchmarkingArchitecture.md](spec/PromptBenchmarkingArchitecture.md)
 - If a request is ambiguous, ask for clarification before implementing
 - If a request is impossible to implement or dangerous, explain why and suggest alternatives
 - If a request implies a change to the public API, ask for approval before implementing
@@ -30,7 +34,7 @@ Key structural facts:
 - Configuration is TOML-only (no programmatic config objects exposed to instructors)
 - The `%%notebook_ta` IPython cell magic is the sole student-facing interface
 
-See [Architecture.md](Architecture.md) for module layout, data models, component interaction
+See [Architecture.md](spec/Architecture.md) for module layout, data models, component interaction
 diagrams, and the full file tree.
 
 ---
@@ -48,7 +52,7 @@ python -m pytest tests/
 python -m mypy notebook_ta/
 ```
 
-CI runs on Python 3.11 and 3.12 across Ubuntu, macOS, and Windows — see
+CI runs on Python 3.11+ across Ubuntu, macOS, and Windows — see
 [.github/workflows/ci.yml](.github/workflows/ci.yml).
 
 ---
@@ -56,7 +60,7 @@ CI runs on Python 3.11 and 3.12 across Ubuntu, macOS, and Windows — see
 ## Conventions
 
 ### Code style
-- Follow **PEP 8**; line length ≤ 100 characters (enforced by `ruff`).
+- Follow **PEP 8**; line length ≤ 100 characters.
 - Use `from __future__ import annotations` in every module for deferred evaluation of type hints.
 - Type hints are required on all public functions and class methods (`mypy --strict`).
 

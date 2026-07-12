@@ -68,6 +68,10 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
             "Could not prepare unit test for timeout enforcement: {error}"
         ),
         "runner_process_no_result": "Unit test process exited without returning a result.",
+        "runner_student_globals_not_configured": (
+            "The test requests 'student_globals', but its configuration does not specify "
+            "'student_symbols' or enable 'export_student_globals'."
+        ),
         "runner_timed_out": (
             "Unit test timed out after {timeout:g} seconds and was cancelled."
         ),
@@ -122,6 +126,10 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "runner_missing_student_name": (
             "Le nom {name!r} n'est pas défini."),
         "runner_output_label": "Sortie",
+        "runner_student_globals_not_configured": (
+            "Le test demande 'student_globals', mais sa configuration ne définit pas "
+            "'student_symbols' et n'active pas 'export_student_globals'."
+        ),
         "runner_prepare_timeout_failed": (
             "Impossible de preparer le test unitaire pour appliquer le timeout : {error}"
         ),

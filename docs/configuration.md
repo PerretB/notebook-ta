@@ -90,8 +90,11 @@ Each exercise is declared under `[exercises.<id>]`.
 | `code` | string | Inline Python function source |
 | `module` | string | Dotted module path for external test |
 | `function` | string | Function name within the external module |
+| `student_symbols` | list of strings | Symbols placed in the `student_globals` dictionary passed to the test. Omit when using named parameters. |
+| `export_student_globals` | boolean | Export the full notebook namespace as `student_globals`. Defaults to `false`; use only when a selected symbol list cannot work. |
 
 Exactly one of `code` or (`module` + `function`) must be specified.
+`student_symbols` and `export_student_globals` are mutually exclusive.
 
 ---
 

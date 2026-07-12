@@ -47,6 +47,8 @@ class TestDefinition(BaseModel):
     code: str | None = None
     module: str | None = None
     function: str | None = None
+    student_symbols: list[str] | None = None
+    export_student_globals: bool = False
 
     @model_validator(mode="after")
     def validate_source(self) -> TestDefinition:
@@ -63,6 +65,11 @@ class TestDefinition(BaseModel):
         if has_external and (self.module is None or self.function is None):
             raise ValueError(
                 "TestDefinition with external source must specify both 'module' and 'function'."
+            )
+        if self.student_symbols is not None and self.export_student_globals:
+            raise ValueError(
+                "TestDefinition cannot specify both 'student_symbols' and "
+                "'export_student_globals'."
             )
         return self
 

@@ -83,7 +83,7 @@ class TestRunner:
             return TestResult(name=test_def.name, passed=False, message=str(exc))
 
         try:
-            args = self._build_args(fn, namespace, language)
+            args = self._build_args(fn, test_def, namespace, language)
         except LookupError as exc:
             return TestResult(name=test_def.name, passed=False, message=str(exc))
 
@@ -212,18 +212,38 @@ class TestRunner:
 
     @staticmethod
     def _build_args(
-        fn: Callable[..., Any], namespace: dict[str, Any], language: str
+        fn: Callable[..., Any],
+        test_def: TestDefinition,
+        namespace: dict[str, Any],
+        language: str,
     ) -> dict[str, Any]:
         """Build the keyword argument dict for the test function.
 
-        If any parameter is named ``student_globals``, pass the full namespace as that argument.
-        Otherwise, look up each parameter by name in the namespace.
+        Named parameters are looked up directly. A ``student_globals`` parameter receives either
+        the configured ``student_symbols`` subset or, when explicitly enabled, the full namespace.
         """
         sig = inspect.signature(fn)
         params = list(sig.parameters.keys())
 
         if "student_globals" in params:
-            return {"student_globals": namespace}
+            if test_def.export_student_globals:
+                return {"student_globals": namespace}
+            if test_def.student_symbols is None:
+                raise LookupError(
+                    translate("runner_student_globals_not_configured", language=language)
+                )
+            selected: dict[str, Any] = {}
+            for symbol in test_def.student_symbols:
+                if symbol not in namespace:
+                    raise LookupError(
+                        translate(
+                            "runner_missing_student_name",
+                            {"name": symbol},
+                            language=language,
+                        )
+                    )
+                selected[symbol] = namespace[symbol]
+            return {"student_globals": selected}
 
         args: dict[str, Any] = {}
         for param in params:

@@ -6,14 +6,6 @@ LLM/model combinations before rolling them out to students. It is documented in 
 [the architecture spec](https://github.com/PerretB/notebook-ta/blob/main/spec/PromptBenchmarkingArchitecture.md)
 (architecture).
 
-## Installation
-
-The benchmarking UI requires the optional `bench` extra:
-
-```bash
-pip install "notebook-ta[bench]"
-```
-
 ## Launching
 
 ```bash
