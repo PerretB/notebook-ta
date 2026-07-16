@@ -52,8 +52,7 @@ def make_exercise(
     return ExerciseConfig(
         id=exercise_id,
         statement="Write add(a, b).",
-        tests=tests
-        or [TestDefinition(name="adds", code="def adds(add): return add(2, 3) == 5")],
+        tests=tests or [TestDefinition(name="adds", code="def adds(add): return add(2, 3) == 5")],
     )
 
 
@@ -66,7 +65,9 @@ def make_solution(
 def make_model(label: str = "m1") -> ModelUnderTest:
     return ModelUnderTest(
         label=label,
-        llm_config=LLMConfig(provider="ollama", model="llama3.2:3b", base_url="http://localhost:11434"),
+        llm_config=LLMConfig(
+            provider="ollama", model="llama3.2:3b", base_url="http://localhost:11434"
+        ),
     )
 
 
@@ -212,6 +213,27 @@ while True:
         assert records[0].status == "completed"
         assert records[0].test_results[0].passed is False
         assert "timed out after 0.2 seconds" in (records[0].test_results[0].message or "")
+
+    @pytest.mark.asyncio
+    async def test_solution_worker_crash_is_reported_as_failed_job(self) -> None:
+        config = make_exercise()
+        solution = make_solution(code="import os\nos._exit(7)")
+        job = BenchJob(config, solution, make_model("m1"), make_prompt_version())
+        provider = FakeProvider(["unused"])
+        run = BenchmarkRun(prompt_version_id="V1", model_labels=["m1"], job_count=1)
+        executor = BenchExecutor()
+        records = []
+
+        def on_progress(job, status, message, record) -> None:
+            if record is not None:
+                records.append(record)
+
+        with patch("notebook_ta.bench.executor.create_provider", return_value=provider):
+            await executor.run([job], run, on_progress)
+
+        assert records[0].status == "failed"
+        assert records[0].error == "Benchmark test worker exited without returning a result."
+        assert provider.call_count == 0
 
     @pytest.mark.asyncio
     async def test_metrics_use_word_count_fallback_without_usage(self) -> None:
