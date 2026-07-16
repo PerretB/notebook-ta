@@ -13,6 +13,8 @@ from notebook_ta.logging import get_logger
 
 _log = get_logger("bench.app")
 
+_BENCH_HOST = "127.0.0.1"
+
 
 def main(project_path: str | None = None) -> None:
     """Launch the benchmarking GUI and show its project welcome dialog.
@@ -30,7 +32,14 @@ def main(project_path: str | None = None) -> None:
     def index() -> None:
         layout.build(state)
 
-    ui.run(title="Notebook-TA Benchmarking", reload=False, show=True, port=0)
+    _log.info("Starting benchmark server on http://%s (loopback only)", _BENCH_HOST)
+    ui.run(
+        title="Notebook-TA Benchmarking",
+        host=_BENCH_HOST,
+        reload=False,
+        show=True,
+        port=0,
+    )
 
 
 if __name__ in {"__main__", "__mp_main__"}:
