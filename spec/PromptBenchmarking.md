@@ -133,5 +133,9 @@ Throughput (Generation Speed): Measured in tokens per second (or words per secon
 10. Project Persistence
 Full-State Serialization: Saving the project exports a single file containing the file path of the source TOML catalog, all user-added student responses, the chronological library of system prompts, and the complete execution history (including outputs, metrics, and input-snapshots).
 
+Credentials are never stored in the project file. Model settings persist only the name of an
+environment variable containing an API key; its value is resolved in memory when the provider is
+created.
+
 A save button should be always available in the UI, and an auto-save option should be provided to automatically save the project at regular intervals or after significant changes. A warning should be displayed if the user attempts to close the application with unsaved changes.
 

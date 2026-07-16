@@ -5,10 +5,9 @@ from __future__ import annotations
 from nicegui import ui
 
 from notebook_ta.bench.executor import BenchJob
-from notebook_ta.bench.models import ExecutionRecord, ModelUnderTest
+from notebook_ta.bench.models import BenchLLMConfig, ExecutionRecord, ModelUnderTest
 from notebook_ta.bench.state import BenchAppState
 from notebook_ta.bench.ui._helpers import tracked_on_change
-from notebook_ta.config.models import LLMConfig
 
 _UI_DELETED_MESSAGES = (
     "The client this element belongs to has been deleted.",
@@ -138,7 +137,9 @@ def build(state: BenchAppState) -> None:
             )
             model_input = ui.input("Model name")
             base_url_input = ui.input("Base URL", value="http://localhost:11434")
-            api_key_input = ui.input("API Key", password=True)
+            api_key_env_input = ui.input(
+                "API key environment variable"
+            ).props("autocomplete=off")
 
             def _add_model() -> None:
                 if not label_input.value or not model_input.value:
@@ -147,11 +148,11 @@ def build(state: BenchAppState) -> None:
                 state.add_model(
                     ModelUnderTest(
                         label=label_input.value,
-                        llm_config=LLMConfig(
+                        llm_config=BenchLLMConfig(
                             provider=provider_select.value,
                             model=model_input.value,
                             base_url=base_url_input.value,
-                            api_key=api_key_input.value or None,
+                            api_key_env=api_key_env_input.value or None,
                         ),
                     )
                 )

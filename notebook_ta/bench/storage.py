@@ -14,13 +14,17 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from notebook_ta.bench.models import BenchProject, BenchProjectError, BenchSettings
-from notebook_ta.config.models import LLMConfig
+from notebook_ta.bench.models import (
+    BenchLLMConfig,
+    BenchProject,
+    BenchProjectError,
+    BenchSettings,
+)
 from notebook_ta.logging import get_logger
 
 _log = get_logger("bench.storage")
 
-CURRENT_SCHEMA_VERSION = 1
+CURRENT_SCHEMA_VERSION = 2
 
 # Small, user-scoped (not project-scoped) pointer file remembering the last opened
 # project, so `notebook-ta bench` with no argument can reopen it automatically.
@@ -55,7 +59,7 @@ def _default_project() -> BenchProject:
     """Return a blank project with a placeholder internal model configuration."""
     return BenchProject(
         settings=BenchSettings(
-            internal_model=LLMConfig(
+            internal_model=BenchLLMConfig(
                 provider="ollama",
                 model="llama3.2:3b",
                 base_url="http://localhost:11434",

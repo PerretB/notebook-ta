@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 
 from notebook_ta.bench.internal_model import InternalModelService, build_authoring_prompt
-from notebook_ta.bench.models import BenchSettings
+from notebook_ta.bench.models import BenchLLMConfig, BenchSettings
 from notebook_ta.config.models import ExerciseConfig, LLMConfig
 from notebook_ta.llm.base import LLMProvider, TokenUsage
 
@@ -38,7 +38,7 @@ class FakeStreamingProvider(LLMProvider):
 
 def make_settings() -> BenchSettings:
     return BenchSettings(
-        internal_model=LLMConfig(
+        internal_model=BenchLLMConfig(
             provider="ollama", model="llama3.2:3b", base_url="http://localhost:11434"
         )
     )

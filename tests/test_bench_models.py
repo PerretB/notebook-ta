@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import pytest
+
 from notebook_ta.bench.models import (
     DEFAULT_TAG_COLOR,
     DEFAULT_TAG_COLORS,
+    BenchLLMConfig,
     BenchProject,
     BenchSettings,
     ExecutionRecord,
@@ -13,12 +16,11 @@ from notebook_ta.bench.models import (
     PromptVersion,
     StudentSolution,
 )
-from notebook_ta.config.models import LLMConfig
 
 
 def make_settings() -> BenchSettings:
     return BenchSettings(
-        internal_model=LLMConfig(
+        internal_model=BenchLLMConfig(
             provider="ollama", model="llama3.2:3b", base_url="http://localhost:11434"
         )
     )
@@ -48,9 +50,7 @@ class TestBenchProjectHelpers:
     def test_next_prompt_version_id_sequence(self) -> None:
         project = BenchProject(settings=make_settings())
         assert project.next_prompt_version_id() == "V1"
-        project.prompt_versions.append(
-            PromptVersion(id="V1", on_success="s", on_failure="f")
-        )
+        project.prompt_versions.append(PromptVersion(id="V1", on_success="s", on_failure="f"))
         assert project.next_prompt_version_id() == "V2"
 
     def test_solutions_for_filters_by_exercise(self) -> None:
@@ -112,12 +112,30 @@ class TestBenchProjectHelpers:
 
 
 class TestBenchProjectSerialization:
+    def test_runtime_api_key_is_resolved_without_being_serialized(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        secret = "sentinel-secret-value"
+        monkeypatch.setenv("NOTEBOOK_TA_TEST_API_KEY", secret)
+        config = BenchLLMConfig(
+            provider="openai_compat",
+            model="test-model",
+            base_url="https://example.invalid/v1",
+            api_key_env="NOTEBOOK_TA_TEST_API_KEY",
+        )
+
+        assert config.to_runtime_config().api_key == secret
+        serialized = config.model_dump_json()
+        assert secret not in serialized
+        assert '"api_key":' not in serialized
+        assert '"api_key_env":"NOTEBOOK_TA_TEST_API_KEY"' in serialized
+
     def test_round_trip_json(self) -> None:
         project = BenchProject(settings=make_settings())
         project.models_under_test.append(
             ModelUnderTest(
                 label="llama3.2:3b (ollama)",
-                llm_config=LLMConfig(
+                llm_config=BenchLLMConfig(
                     provider="ollama", model="llama3.2:3b", base_url="http://localhost:11434"
                 ),
             )
