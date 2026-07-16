@@ -13,6 +13,7 @@ from notebook_ta.config.loader import load_exercises, load_global
 from notebook_ta.config.models import (
     ConfigurationError,
     GlobalConfig,
+    LLMConfig,
     TestDefinition,
 )
 
@@ -120,6 +121,64 @@ class TestLoadGlobal:
         f.write_text(content, encoding="utf-8")
         with pytest.raises(ConfigurationError):
             load_global(f)
+
+    def test_api_key_is_resolved_from_environment_without_serialization(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        secret = "sentinel-notebook-secret"
+        monkeypatch.setenv("NOTEBOOK_TA_TEST_API_KEY", secret)
+        content = textwrap.dedent("""\
+            [llm]
+            provider = "openai_compat"
+            model = "test-model"
+            base_url = "https://example.invalid/v1"
+            api_key_env = "NOTEBOOK_TA_TEST_API_KEY"
+
+            [prompts]
+            on_success = "Great job!"
+            on_failure = "Try again."
+            on_no_llm = "LLM unavailable."
+        """)
+        path = tmp_path / "environment-key.toml"
+        path.write_text(content, encoding="utf-8")
+
+        config = load_global(path)
+
+        assert config.llm.api_key == secret
+        serialized = config.model_dump_json()
+        assert secret not in serialized
+        assert '"api_key"' not in serialized
+        assert "NOTEBOOK_TA_TEST_API_KEY" in serialized
+
+    def test_literal_api_key_is_rejected(self, tmp_path: Path) -> None:
+        content = textwrap.dedent("""\
+            [llm]
+            provider = "openai_compat"
+            model = "test-model"
+            base_url = "https://example.invalid/v1"
+            api_key = "must-not-be-stored"
+
+            [prompts]
+            on_success = "Great job!"
+            on_failure = "Try again."
+            on_no_llm = "LLM unavailable."
+        """)
+        path = tmp_path / "literal-key.toml"
+        path.write_text(content, encoding="utf-8")
+
+        with pytest.raises(ConfigurationError, match="api_key_env"):
+            load_global(path)
+
+    def test_llm_config_rejects_literal_api_key_override(self) -> None:
+        with pytest.raises(ValidationError, match="api_key_env"):
+            LLMConfig.model_validate(
+                {
+                    "provider": "openai_compat",
+                    "model": "test-model",
+                    "base_url": "https://example.invalid/v1",
+                    "api_key": "must-not-be-stored",
+                }
+            )
 
 
 # ---------------------------------------------------------------------------

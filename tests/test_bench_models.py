@@ -124,7 +124,7 @@ class TestBenchProjectSerialization:
             api_key_env="NOTEBOOK_TA_TEST_API_KEY",
         )
 
-        assert config.to_runtime_config().api_key == secret
+        assert config.api_key == secret
         serialized = config.model_dump_json()
         assert secret not in serialized
         assert '"api_key":' not in serialized

@@ -56,7 +56,7 @@ class InternalModelService:
         self, exercise: ExerciseConfig, tags: list[str]
     ) -> AsyncIterator[str]:
         """Stream a draft student solution for `exercise` exhibiting the given `tags`."""
-        provider = create_provider(self._settings.internal_model.to_runtime_config())
+        provider = create_provider(self._settings.internal_model)
         prompt = build_authoring_prompt(exercise, tags)
         _log.debug("Generating draft solution for exercise=%r tags=%r", exercise.id, tags)
         async for chunk in provider.stream(prompt):
