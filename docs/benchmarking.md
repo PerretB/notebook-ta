@@ -47,8 +47,33 @@ list starts with `correct`, `wrong complexity`, `logic flow`, and `missing edge-
    changed after generation, the cell is flagged **⚠️ Stale (Inputs Modified)** with a one-click
    **Re-run**.
 
+## API credentials
+
+The benchmark UI never accepts or stores an API key value. For the internal model and each model
+under test, enter the **name of an environment variable** in the **API key environment variable**
+field. Set that variable before launching the benchmark application. For example:
+
+```powershell
+$env:NOTEBOOK_TA_OPENAI_KEY = "your-api-key"
+notebook-ta bench
+```
+
+```bash
+export NOTEBOOK_TA_OPENAI_KEY="your-api-key"
+notebook-ta bench
+```
+
+Enter `NOTEBOOK_TA_OPENAI_KEY`—not the key value itself—in the UI. The application resolves the
+variable only when it creates the LLM provider. Local providers such as Ollama normally leave this
+field empty.
+
+Only the environment-variable name is saved in the benchmark project. The resolved secret is
+kept in memory and is never written to project JSON. Ensure the variable is available in the
+environment whenever you reopen the project and run that model.
+
 ## Project files
 
 Everything (settings, per-exercise setup code, student solutions, prompt version history, and the
 full execution history with metrics) is saved to a single JSON project file via the **Save** button
-or autosave.
+or autosave. API key values are excluded; project files contain only their environment-variable
+references.

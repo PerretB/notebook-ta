@@ -31,6 +31,10 @@ Both files can be loaded from a **local path** or an **`https://` URL**.
 | `temperature` | float | `0.7` | Sampling temperature (0.0 = deterministic, higher = more creative) |
 | `streaming` | boolean | `true` | Enable streaming responses |
 
+The `api_key` setting above applies to notebook TOML configuration. The separate
+[benchmarking tool](benchmarking.md#api-credentials) does not store API key values in its project
+files; it uses environment-variable references instead.
+
 When the provider is `ollama` and `base_url` points to localhost, `notebook_ta.load()` checks that
 the Ollama server is running and starts it when necessary. It then checks the selected model and
 downloads it when missing. Progress is shown directly in the notebook. Remote Ollama servers are
