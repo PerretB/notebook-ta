@@ -114,13 +114,12 @@ def build(
                 on_change=tracked_on_change(state, internal_model, "base_url"),
             )
             ui.input(
-                "API Key",
-                value=internal_model.api_key or "",
-                password=True,
+                "API key environment variable",
+                value=internal_model.api_key_env or "",
                 on_change=tracked_on_change(
-                    state, internal_model, "api_key", lambda value: value or None
+                    state, internal_model, "api_key_env", lambda value: value or None
                 ),
-            )
+            ).props("autocomplete=off")
 
     with ui.card().classes("w-full"):
         ui.label("Python Path").classes("text-md font-bold")

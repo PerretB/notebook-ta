@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from notebook_ta.bench.models import (
     DEFAULT_SOLUTION_TAGS,
+    BenchLLMConfig,
     ExecutionRecord,
     InputSnapshot,
     ModelUnderTest,
 )
 from notebook_ta.bench.state import BenchAppState
 from notebook_ta.bench.storage import ProjectStore
-from notebook_ta.config.models import ExerciseConfig, LLMConfig
+from notebook_ta.config.models import ExerciseConfig
 
 
 def make_state() -> BenchAppState:
@@ -49,7 +50,7 @@ class TestRunNaming:
         state.project.models_under_test.append(
             ModelUnderTest(
                 label="m1",
-                llm_config=LLMConfig(
+                llm_config=BenchLLMConfig(
                     provider="ollama",
                     model="llama3.2:3b",
                     base_url="http://localhost:11434",

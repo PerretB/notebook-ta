@@ -6,12 +6,13 @@ project JSON file (see `notebook_ta.bench.storage.ProjectStore`).
 
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import UTC, datetime
 from re import fullmatch
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from notebook_ta.config.models import LLMConfig
 
@@ -40,10 +41,26 @@ def _new_id() -> str:
     return str(uuid.uuid4())
 
 
+class BenchLLMConfig(LLMConfig):
+    """Persistable LLM configuration containing a credential reference, never a secret."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    api_key: None = Field(default=None, exclude=True)
+    api_key_env: str | None = Field(default=None, min_length=1)
+
+    def to_runtime_config(self) -> LLMConfig:
+        """Resolve the configured environment variable into an in-memory LLM config."""
+        values = self.model_dump()
+        api_key_env = values.pop("api_key_env")
+        api_key = os.environ.get(api_key_env) if api_key_env else None
+        return LLMConfig(**values, api_key=api_key)
+
+
 class BenchSettings(BaseModel):
     """Global settings for a benchmarking project."""
 
-    internal_model: LLMConfig
+    internal_model: BenchLLMConfig
     unit_test_timeout: float = Field(default=5.0, gt=0)
     python_path_dirs: list[str] = []
     known_tags: list[str] = Field(default_factory=lambda: list(DEFAULT_SOLUTION_TAGS))
@@ -84,7 +101,7 @@ class ModelUnderTest(BaseModel):
     """A model configuration selectable for benchmarking."""
 
     label: str
-    llm_config: LLMConfig
+    llm_config: BenchLLMConfig
 
 
 class BenchmarkRun(BaseModel):
@@ -160,7 +177,7 @@ class ExecutionRecord(BaseModel):
 class BenchProject(BaseModel):
     """Root object serialized to/from the benchmarking project JSON file."""
 
-    schema_version: int = 1
+    schema_version: int = 2
     settings: BenchSettings
     draft_prompt_on_success: str = ""
     draft_prompt_on_failure: str = ""

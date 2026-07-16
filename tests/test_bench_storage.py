@@ -7,9 +7,13 @@ from pathlib import Path
 import pytest
 
 import notebook_ta.bench.storage as storage_module
-from notebook_ta.bench.models import BenchProject, BenchProjectError, ModelUnderTest
+from notebook_ta.bench.models import (
+    BenchLLMConfig,
+    BenchProject,
+    BenchProjectError,
+    ModelUnderTest,
+)
 from notebook_ta.bench.storage import ProjectStore, get_last_project_path, set_last_project_path
-from notebook_ta.config.models import LLMConfig
 
 
 class TestProjectStoreLoad:
@@ -42,6 +46,32 @@ class TestProjectStoreLoad:
 
 
 class TestProjectStoreSaveRoundTrip:
+    def test_save_never_persists_resolved_api_key(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        path = tmp_path / "project.json"
+        secret = "sentinel-project-secret"
+        monkeypatch.setenv("NOTEBOOK_TA_BENCH_API_KEY", secret)
+        project = ProjectStore(None).load()
+        project.models_under_test.append(
+            ModelUnderTest(
+                label="remote model",
+                llm_config=BenchLLMConfig(
+                    provider="openai_compat",
+                    model="remote-model",
+                    base_url="https://example.invalid/v1",
+                    api_key_env="NOTEBOOK_TA_BENCH_API_KEY",
+                ),
+            )
+        )
+
+        ProjectStore(path).save(project)
+
+        saved = path.read_text(encoding="utf-8")
+        assert secret not in saved
+        assert '"api_key"' not in saved
+        assert "NOTEBOOK_TA_BENCH_API_KEY" in saved
+
     def test_save_as_then_load_round_trip(self, tmp_path: Path) -> None:
         path = tmp_path / "subdir" / "project.json"
         store = ProjectStore(None)
@@ -49,7 +79,7 @@ class TestProjectStoreSaveRoundTrip:
         project.models_under_test.append(
             ModelUnderTest(
                 label="llama3.2:3b (ollama)",
-                llm_config=LLMConfig(
+                llm_config=BenchLLMConfig(
                     provider="ollama", model="llama3.2:3b", base_url="http://localhost:11434"
                 ),
             )

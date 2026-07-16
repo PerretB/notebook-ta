@@ -326,7 +326,7 @@ async def _run_solution_tests(
     test_results: list[TestResult] = []
     try:
         global_config = GlobalConfig(
-            llm=state.project.settings.internal_model,
+            llm=state.project.settings.internal_model.to_runtime_config(),
             prompts=PromptConfig(on_success="", on_failure="", on_no_llm=""),
         )
         exercise = Exercise(exercise_config, global_config)

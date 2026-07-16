@@ -105,7 +105,7 @@ def extended_sys_path(dirs: list[str]) -> Iterator[None]:
 def _build_global_config(prompt_version: PromptVersion, model: ModelUnderTest) -> GlobalConfig:
     """Build a synthetic GlobalConfig so `Exercise.build_prompt()` can be reused unchanged."""
     return GlobalConfig(
-        llm=model.llm_config,
+        llm=model.llm_config.to_runtime_config(),
         prompts=PromptConfig(
             on_success=prompt_version.on_success,
             on_failure=prompt_version.on_failure,
@@ -253,7 +253,9 @@ class BenchExecutor:
     def _get_provider(self, model: ModelUnderTest) -> LLMProvider:
         """Return a cached LLMProvider instance for `model`, creating one if needed."""
         if model.label not in self._provider_cache:
-            self._provider_cache[model.label] = create_provider(model.llm_config)
+            self._provider_cache[model.label] = create_provider(
+                model.llm_config.to_runtime_config()
+            )
         return self._provider_cache[model.label]
 
     async def run(

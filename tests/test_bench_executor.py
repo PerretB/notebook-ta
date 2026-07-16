@@ -8,7 +8,13 @@ from unittest.mock import patch
 import pytest
 
 from notebook_ta.bench.executor import BenchExecutor, BenchJob, build_jobs
-from notebook_ta.bench.models import BenchmarkRun, ModelUnderTest, PromptVersion, StudentSolution
+from notebook_ta.bench.models import (
+    BenchLLMConfig,
+    BenchmarkRun,
+    ModelUnderTest,
+    PromptVersion,
+    StudentSolution,
+)
 from notebook_ta.config.models import ExerciseConfig, LLMConfig, TestDefinition
 from notebook_ta.llm.base import LLMProvider, TokenUsage
 
@@ -65,7 +71,7 @@ def make_solution(
 def make_model(label: str = "m1") -> ModelUnderTest:
     return ModelUnderTest(
         label=label,
-        llm_config=LLMConfig(
+        llm_config=BenchLLMConfig(
             provider="ollama", model="llama3.2:3b", base_url="http://localhost:11434"
         ),
     )

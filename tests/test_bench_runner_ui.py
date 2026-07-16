@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 from notebook_ta.bench.executor import BenchJob
-from notebook_ta.bench.models import ModelUnderTest, PromptVersion, StudentSolution
+from notebook_ta.bench.models import (
+    BenchLLMConfig,
+    ModelUnderTest,
+    PromptVersion,
+    StudentSolution,
+)
 from notebook_ta.bench.ui.runner_tab import (
     _finished_job_count,
     _initial_progress_rows,
@@ -12,7 +17,7 @@ from notebook_ta.bench.ui.runner_tab import (
     _progress_row,
     _progress_value,
 )
-from notebook_ta.config.models import ExerciseConfig, LLMConfig
+from notebook_ta.config.models import ExerciseConfig
 
 
 def _make_job(
@@ -25,7 +30,7 @@ def _make_job(
         StudentSolution(exercise_id=exercise_id, label=solution_label, code="answer = 1"),
         ModelUnderTest(
             label=model_label,
-            llm_config=LLMConfig(
+            llm_config=BenchLLMConfig(
                 provider="ollama",
                 model="llama3.2:3b",
                 base_url="http://localhost:11434",

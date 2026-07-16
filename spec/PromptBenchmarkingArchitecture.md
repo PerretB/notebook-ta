@@ -143,7 +143,7 @@ what gets serialized to/from the project JSON file (spec §10).
 | Field | Type | Description |
 |-------|------|--------------|
 | `label` | `str` | Unique display name, e.g. `"llama3.2:3b (ollama)"`. Used as the join key throughout the UI and execution records. |
-| `llm_config` | `LLMConfig` | Full connection spec (provider, base_url, model, api_key, timeout, temperature). |
+| `llm_config` | `BenchLLMConfig` | Persistable connection spec (provider, base URL, model, API-key environment-variable reference, timeout, temperature). Secret values are resolved only at runtime and are never serialized. |
 
 ### `BenchmarkRun`
 
@@ -215,7 +215,7 @@ One row per completed (or failed) job — the atomic unit shown in the Compare m
 
 ```python
 class BenchProject(BaseModel):
-    schema_version: int = 1
+    schema_version: int = 2
     settings: BenchSettings
     draft_prompt_on_success: str = ""
     draft_prompt_on_failure: str = ""
