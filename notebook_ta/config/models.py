@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+from collections.abc import Mapping
 from typing import ClassVar
 
 from pydantic import BaseModel, Field, model_validator
@@ -22,11 +24,26 @@ class LLMConfig(BaseModel):
     provider: str = "ollama"
     model: str
     base_url: str
-    api_key: str | None = None
+    api_key_env: str | None = Field(default=None, min_length=1)
     timeout: int = 180
     temperature: float = 0.7
     streaming: bool = True
     available_models: list[ModelSpec] = []
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_literal_api_key(cls, data: object) -> object:
+        """Reject plaintext API keys; configurations must reference an environment variable."""
+        if isinstance(data, Mapping) and "api_key" in data:
+            raise ValueError(
+                "api_key is not supported; set api_key_env to an environment variable name"
+            )
+        return data
+
+    @property
+    def api_key(self) -> str | None:
+        """Resolve the configured API-key environment variable without persisting its value."""
+        return os.environ.get(self.api_key_env) if self.api_key_env else None
 
 
 class PromptConfig(BaseModel):

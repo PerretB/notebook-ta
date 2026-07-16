@@ -31,7 +31,7 @@ def make_openai_config(**kwargs) -> LLMConfig:
         provider="openai_compat",
         model="llama3.2:3b",
         base_url="http://localhost:1234/v1",
-        api_key="not-set",
+        api_key_env="NOTEBOOK_TA_TEST_API_KEY",
         timeout=30,
     )
     defaults.update(kwargs)

@@ -26,14 +26,34 @@ Both files can be loaded from a **local path** or an **`https://` URL**.
 | `provider` | string | `"ollama"` | LLM backend: `"ollama"` or `"openai_compat"` |
 | `model` | string | — | Model name, or `"auto"` to trigger hardware-based auto-selection |
 | `base_url` | string | — | API endpoint URL |
-| `api_key` | string | `null` | API key (optional for local providers) |
+| `api_key_env` | string | `null` | Name of the environment variable containing the API key (optional for local providers) |
 | `timeout` | integer | `120` | Request timeout in seconds |
 | `temperature` | float | `0.7` | Sampling temperature (0.0 = deterministic, higher = more creative) |
 | `streaming` | boolean | `true` | Enable streaming responses |
 
-The `api_key` setting above applies to notebook TOML configuration. The separate
-[benchmarking tool](benchmarking.md#api-credentials) does not store API key values in its project
-files; it uses environment-variable references instead.
+Set the referenced environment variable before loading notebook-ta. For example:
+
+```powershell
+$env:NOTEBOOK_TA_OPENAI_KEY = "your-api-key"
+```
+
+```bash
+export NOTEBOOK_TA_OPENAI_KEY="your-api-key"
+```
+
+Then configure only its name in TOML:
+
+```toml
+[llm]
+provider = "openai_compat"
+model = "your-model"
+base_url = "https://your-provider.example/v1"
+api_key_env = "NOTEBOOK_TA_OPENAI_KEY"
+```
+
+Literal `api_key` values are rejected. The secret is resolved from the process environment only
+when the provider needs it and is never serialized by notebook-ta. The
+[benchmarking tool](benchmarking.md#api-credentials) uses the same convention.
 
 When the provider is `ollama` and `base_url` points to localhost, `notebook_ta.load()` checks that
 the Ollama server is running and starts it when necessary. It then checks the selected model and

@@ -111,7 +111,7 @@ Describes a single LLM model option and its hardware requirements.
 | `provider`         | `str`             | `"ollama"` | `"ollama"` or `"openai_compat"`                          |
 | `model`            | `str`             | —          | Model name or `"auto"` to trigger the setup wizard       |
 | `base_url`         | `str`             | —          | API endpoint URL                                         |
-| `api_key`          | `str \| None`     | `None`     | API key (optional for local providers)                   |
+| `api_key_env`      | `str \| None`     | `None`     | Environment-variable name for the API key                |
 | `timeout`          | `int`             | `120`      | Request timeout in seconds                               |
 | `streaming`        | `bool`            | `True`     | Enable streaming responses                               |
 | `available_models` | `list[ModelSpec]` | `[]`       | Candidate models considered when `model = "auto"`        |
@@ -242,7 +242,8 @@ Dispatches on `config.provider`. Raises `ValueError` for unknown provider names.
 
 ### 4.3 OpenAICompatProvider (`llm/openai_compat.py`)
 
-- Uses `openai.AsyncOpenAI(base_url=config.base_url, api_key=config.api_key)`
+- Resolves `config.api_key_env` from the process environment at runtime and passes the resulting
+  in-memory value to `openai.AsyncOpenAI`; the secret is never read from or serialized to TOML.
 - Calls `client.chat.completions.create(model=..., messages=..., stream=True)`
 - Yields content delta strings from the streamed response
 - `is_available()`: attempts a synchronous models list call; returns `False` on connection error

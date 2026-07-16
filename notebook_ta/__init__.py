@@ -56,7 +56,8 @@ def load(
             fails.
         llm_overrides: Optional dict of LLM settings that override the values
             from *global_config*. Valid keys mirror :class:`LLMConfig` fields
-            (e.g. ``model``, ``base_url``, ``provider``, ``timeout``).
+            (e.g. ``model``, ``base_url``, ``provider``, ``api_key_env``, ``timeout``).
+            Literal API key values are not accepted.
         debug: When ``True``, enable DEBUG-level logging to the terminal and
                display the final LLM prompt in the notebook output as a
                collapsible widget before each LLM call.  Defaults to ``False``.

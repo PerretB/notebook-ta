@@ -6,13 +6,12 @@ project JSON file (see `notebook_ta.bench.storage.ProjectStore`).
 
 from __future__ import annotations
 
-import os
 import uuid
 from datetime import UTC, datetime
 from re import fullmatch
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 from notebook_ta.config.models import LLMConfig
 
@@ -43,18 +42,6 @@ def _new_id() -> str:
 
 class BenchLLMConfig(LLMConfig):
     """Persistable LLM configuration containing a credential reference, never a secret."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    api_key: None = Field(default=None, exclude=True)
-    api_key_env: str | None = Field(default=None, min_length=1)
-
-    def to_runtime_config(self) -> LLMConfig:
-        """Resolve the configured environment variable into an in-memory LLM config."""
-        values = self.model_dump()
-        api_key_env = values.pop("api_key_env")
-        api_key = os.environ.get(api_key_env) if api_key_env else None
-        return LLMConfig(**values, api_key=api_key)
 
 
 class BenchSettings(BaseModel):
