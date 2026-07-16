@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -13,7 +15,7 @@ from nicegui.testing import User
 from notebook_ta.bench.state import BenchAppState
 from notebook_ta.bench.storage import ProjectStore
 from notebook_ta.bench.ui.exercises_tab import _build_solutions, build
-from notebook_ta.config.models import ExerciseConfig
+from notebook_ta.config.models import ExerciseConfig, TestDefinition
 from notebook_ta.testing.runner import TestResult as RunnerResult
 
 pytest_plugins = ["nicegui.testing.user_plugin"]
@@ -72,7 +74,11 @@ async def test_run_tests_renders_ansi_messages_as_html(user: User) -> None:
         passed=True,
         message="\033[92m✔ 1/1 tests passed.\033[0m",
     )
-    with patch("notebook_ta.bench.ui.exercises_tab.TestRunner.run", return_value=[result]):
+    worker_result = SimpleNamespace(test_results=[result], error=None)
+    with patch(
+        "notebook_ta.bench.ui.exercises_tab.run_solution_tests_with_timeout",
+        return_value=worker_result,
+    ):
         await user.open("/")
         user.find("Run tests").click()
         await user.should_see("1/1 tests passed.")
@@ -98,9 +104,10 @@ async def test_run_tests_drops_duplicate_clicks_when_setup_code_exists(user: Use
         _build_solutions(state, exercise)
 
     result = RunnerResult(name="custom", passed=True, message="passed once")
+    worker_result = SimpleNamespace(test_results=[result], error=None)
     with patch(
-        "notebook_ta.bench.ui.exercises_tab.TestRunner.run",
-        return_value=[result],
+        "notebook_ta.bench.ui.exercises_tab.run_solution_tests_with_timeout",
+        return_value=worker_result,
     ) as run:
         await user.open("/")
         button = user.find("Run tests")
@@ -112,6 +119,42 @@ async def test_run_tests_drops_duplicate_clicks_when_setup_code_exists(user: Use
     assert run.call_count == 1
     rendered_html = [element.content for element in user.find(ui.html).elements]
     assert sum("passed once" in content for content in rendered_html) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.nicegui_main_file("notebook_ta/bench/app.py")
+async def test_run_tests_executes_editable_code_outside_server_process(
+    user: User, tmp_path: Path
+) -> None:
+    """The preview path must execute solution code in the spawned worker PID."""
+    worker_pid_path = tmp_path / "worker-pid.txt"
+    state = BenchAppState(ProjectStore(None))
+    exercise = ExerciseConfig(
+        id="ex1",
+        statement="Example",
+        tests=[TestDefinition(name="checks answer", code="def check(answer): return answer == 1")],
+    )
+    state.exercise_registry[exercise.id] = exercise
+    state.add_solution(
+        exercise.id,
+        code=(
+            "import os\n"
+            "from pathlib import Path\n"
+            f"Path({str(worker_pid_path)!r}).write_text(str(os.getpid()))\n"
+            "answer = 1\n"
+        ),
+    )
+
+    @ui.page("/")
+    def page() -> None:
+        """Render the solution controls under test."""
+        _build_solutions(state, exercise)
+
+    await user.open("/")
+    user.find("Run tests").click()
+    await user.should_see("checks answer", retries=100)
+
+    assert int(worker_pid_path.read_text(encoding="utf-8")) != os.getpid()
 
 
 @pytest.mark.asyncio
@@ -131,7 +174,7 @@ async def test_run_tests_reports_when_exercise_has_no_tests(user: User) -> None:
     await user.open("/")
     user.find("Run tests").click()
 
-    await user.should_see("No unit tests are configured for this exercise.")
+    await user.should_see("No unit tests are configured for this exercise.", retries=100)
 
 
 @pytest.mark.asyncio

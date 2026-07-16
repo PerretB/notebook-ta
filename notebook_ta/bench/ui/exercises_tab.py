@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import asyncio
+from collections.abc import Awaitable, Callable
 
 from nicegui import events, ui
 
-from notebook_ta.bench.executor import extended_sys_path, run_setup_code
+from notebook_ta.bench.executor import run_solution_tests_with_timeout
 from notebook_ta.bench.internal_model import InternalModelService
 from notebook_ta.bench.models import DEFAULT_TAG_COLOR, StudentSolution
 from notebook_ta.bench.state import BenchAppState
@@ -14,7 +15,7 @@ from notebook_ta.bench.ui.tag_badges import render_tag_badge
 from notebook_ta.config.models import ExerciseConfig, GlobalConfig, PromptConfig
 from notebook_ta.exercise.definition import Exercise
 from notebook_ta.notebook._ansi import ansi_to_html
-from notebook_ta.testing.runner import TestResult, TestRunner
+from notebook_ta.testing.runner import TestResult
 
 
 def build(
@@ -111,8 +112,10 @@ def _build_solutions(
             ui.row().classes("w-max flex-nowrap items-stretch gap-4"),
         ):
             for solution in solutions:
-                with ui.card().classes("shrink-0").style(
-                    "width: 28rem; min-width: 28rem; max-width: 28rem"
+                with (
+                    ui.card()
+                    .classes("shrink-0")
+                    .style("width: 28rem; min-width: 28rem; max-width: 28rem")
                 ):
 
                     def _on_label_change(
@@ -179,12 +182,12 @@ def _build_solutions(
 
                     result_area = ui.column()
 
-                    def _run_tests(
+                    async def _run_tests(
                         sol: StudentSolution = solution,
                         exercise_config: ExerciseConfig = config,
                         results: ui.element = result_area,
                     ) -> None:
-                        _run_solution_tests(state, exercise_config, sol, results)
+                        await _run_solution_tests(state, exercise_config, sol, results)
 
                     def _remove(sol: StudentSolution = solution) -> None:
                         state.remove_solution(sol.id)
@@ -244,9 +247,11 @@ def _build_setup_code_dialog(
     """Build the dialog used to edit exercise setup code."""
     with ui.dialog() as dialog, ui.card().classes("w-full max-w-3xl"):
         ui.label(f"Setup code for {config.id}").classes("text-lg font-bold")
-        setup_editor = ui.codemirror(
-            value=state.project.setup_code_for(config.id), language="Python"
-        ).classes("w-full").style("min-height: 260px")
+        setup_editor = (
+            ui.codemirror(value=state.project.setup_code_for(config.id), language="Python")
+            .classes("w-full")
+            .style("min-height: 260px")
+        )
 
         def _save() -> None:
             try:
@@ -285,7 +290,9 @@ def _run_once(action: Callable[[], None]) -> Callable[[], None]:
     return handler
 
 
-def _drop_queued_duplicates(action: Callable[[], None]) -> Callable[[], None]:
+def _drop_queued_duplicates(
+    action: Callable[[], Awaitable[None]],
+) -> Callable[[], Awaitable[None]]:
     """Return a handler that ignores duplicate events queued by the same UI gesture."""
     running_or_queued = False
 
@@ -293,13 +300,13 @@ def _drop_queued_duplicates(action: Callable[[], None]) -> Callable[[], None]:
         nonlocal running_or_queued
         running_or_queued = False
 
-    def handler() -> None:
+    async def handler() -> None:
         nonlocal running_or_queued
         if running_or_queued:
             return
         running_or_queued = True
         try:
-            action()
+            await action()
         except Exception:
             _reset()
             raise
@@ -308,34 +315,31 @@ def _drop_queued_duplicates(action: Callable[[], None]) -> Callable[[], None]:
     return handler
 
 
-def _run_solution_tests(
+async def _run_solution_tests(
     state: BenchAppState,
     exercise_config: ExerciseConfig,
     solution: StudentSolution,
     results: ui.element,
 ) -> None:
-    """Exec the solution and run its unit tests, rendering results into `results`."""
+    """Run preview code in a timeout-bounded worker and render its test results."""
     error: str | None = None
     test_results: list[TestResult] = []
     try:
-        namespace: dict[str, object] = {}
-        with extended_sys_path(state.project.settings.python_path_dirs):
-            exec(solution.code, namespace)  # noqa: S102 -- isolated authoring-time sandbox
-            global_config = GlobalConfig(
-                llm=state.project.settings.internal_model,
-                prompts=PromptConfig(on_success="", on_failure="", on_no_llm=""),
-            )
-            exercise = Exercise(exercise_config, global_config)
-            test_names = [test_def.name for test_def in exercise.tests]
-            setup_results = run_setup_code(
-                state.project.setup_code_for(exercise_config.id),
-                namespace,
-                test_names,
-            )
-            if setup_results is None:
-                test_results = TestRunner().run(exercise, namespace)
-            else:
-                test_results = setup_results
+        global_config = GlobalConfig(
+            llm=state.project.settings.internal_model,
+            prompts=PromptConfig(on_success="", on_failure="", on_no_llm=""),
+        )
+        exercise = Exercise(exercise_config, global_config)
+        worker_result = await asyncio.to_thread(
+            run_solution_tests_with_timeout,
+            exercise=exercise,
+            solution_code=solution.code,
+            setup_code=state.project.setup_code_for(exercise_config.id),
+            python_path_dirs=list(state.project.settings.python_path_dirs),
+            timeout=state.project.settings.unit_test_timeout,
+        )
+        error = worker_result.error
+        test_results = worker_result.test_results or []
     except Exception as exc:  # pragma: no cover - defensive UI feedback
         error = str(exc)
 
