@@ -90,7 +90,10 @@ def load(
         _run_setup_wizard(cfg, initialization)
 
     # 3. Create LLM provider
-    provider = create_provider(cfg.llm)
+    try:
+        provider = create_provider(cfg.llm)
+    except ValueError as exc:
+        raise ConfigurationError(f"Invalid LLM provider configuration: {exc}") from exc
     _log.debug("LLM provider created: %r (model=%r)", cfg.llm.provider, cfg.llm.model)
     _setup_local_ollama(provider, initialization)
 

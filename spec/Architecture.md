@@ -91,7 +91,10 @@ LICENSE
 
 ### 3.1 Data Models (`config/models.py`)
 
-All configuration is validated using **Pydantic v2**.
+All configuration is validated using **Pydantic v2**. Configuration models use
+`ConfigDict(extra="forbid")`, so undeclared fields fail during loading instead of being ignored.
+Provider names, HTTP(S) URLs, non-empty identifiers, numeric ranges, and automatic model
+selection candidates are validated before runtime components are created.
 
 #### `ModelSpec`
 

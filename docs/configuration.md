@@ -15,6 +15,11 @@ This document describes all configuration options for `notebook-ta`.
 
 Both files can be loaded from a **local path** or an **`https://` URL**.
 
+Configuration is fail-closed. Unknown keys or tables, unsupported provider names, malformed URLs,
+empty identifiers/model names, and out-of-range numeric values raise `ConfigurationError` while
+the files are loaded. Keys are never silently ignored; this includes fields described only in
+future-facing specifications but not listed in this reference.
+
 ---
 
 ## `global_config.toml`
@@ -27,8 +32,8 @@ Both files can be loaded from a **local path** or an **`https://` URL**.
 | `model` | string | — | Model name, or `"auto"` to trigger hardware-based auto-selection |
 | `base_url` | string | — | API endpoint URL |
 | `api_key_env` | string | `null` | Name of the environment variable containing the API key (optional for local providers) |
-| `timeout` | integer | `120` | Request timeout in seconds |
-| `temperature` | float | `0.7` | Sampling temperature (0.0 = deterministic, higher = more creative) |
+| `timeout` | positive integer | `120` | Request timeout in seconds |
+| `temperature` | float from `0.0` to `2.0` | `0.7` | Sampling temperature (0.0 = deterministic, higher = more creative) |
 | `streaming` | boolean | `true` | Enable streaming responses |
 
 Set the referenced environment variable before loading notebook-ta. For example:
@@ -66,14 +71,15 @@ rounded **notebook-ta initialization** panel with a subtle theme-friendly backgr
 #### `[[llm.available_models]]` — Auto-selection Candidates
 
 Used only when `model = "auto"`. The system selects the model with the highest `min_ram_gb` whose
-requirements are met by the detected hardware.
+requirements are met by the detected hardware. At least one candidate is required for
+`model = "auto"`.
 
 | Key | Type | Description |
 |-----|------|-------------|
 | `name` | string | Model identifier (e.g. `"llama3.2:3b"`) |
 | `description` | string | Human-readable label shown during auto-selection |
-| `min_ram_gb` | float | Minimum system RAM in GB |
-| `min_vram_gb` | float | Minimum GPU VRAM in GB (`0` means CPU-only is fine) |
+| `min_ram_gb` | non-negative float | Minimum system RAM in GB |
+| `min_vram_gb` | non-negative float | Minimum GPU VRAM in GB (`0` means CPU-only is fine) |
 
 ### `[prompts]` — Default Prompt Templates
 
@@ -82,7 +88,7 @@ requirements are met by the detected hardware.
 | `on_success` | string | — | Prompt when all tests pass |
 | `on_failure` | string | — | Prompt when tests fail, and for all subsequent hint requests |
 | `on_no_llm` | string | — | Message shown when LLM is unreachable |
-| `hint_history_length` | integer | `3` | Max previous hint exchanges included in context |
+| `hint_history_length` | non-negative integer | `3` | Max previous hint exchanges included in context |
 
 ### Global Unit Test Settings
 

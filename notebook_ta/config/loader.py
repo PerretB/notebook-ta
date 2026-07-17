@@ -86,6 +86,13 @@ def load_exercises(path: str | Path) -> list[ExerciseConfig]:
         ConfigurationError: On I/O, parse, or validation failure.
     """
     data = _read_toml(path)
+    unexpected_tables = sorted(set(data) - {"exercises"})
+    if unexpected_tables:
+        names = ", ".join(repr(name) for name in unexpected_tables)
+        raise ConfigurationError(
+            f"Invalid exercises configuration in {path!r}: unexpected top-level "
+            f"field(s): {names}."
+        )
     exercises_raw = data.get("exercises", {})
     if not isinstance(exercises_raw, dict):
         raise ConfigurationError(
@@ -100,6 +107,12 @@ def load_exercises(path: str | Path) -> list[ExerciseConfig]:
                 f"got {type(exercise_data).__name__}."
             )
         exercise_data = dict(exercise_data)
+        if "id" in exercise_data:
+            raise ConfigurationError(
+                f"Invalid configuration for exercise {exercise_id!r} in {path!r}: "
+                "'id' is derived from the [exercises.<id>] table name and must not "
+                "be configured separately."
+            )
         exercise_data["id"] = exercise_id
         try:
             exercises.append(ExerciseConfig.model_validate(exercise_data))

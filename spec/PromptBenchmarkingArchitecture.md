@@ -114,7 +114,7 @@ what gets serialized to/from the project JSON file (spec §10).
 | `known_tags` | `list[str]` | Shared, editable tag vocabulary offered when tagging student solutions or generating drafts with the internal model. |
 | `tag_colors` | `dict[str, str]` | Per-tag hex colors used by Settings, Exercises, and Compare badges. Missing or invalid colors use a neutral fallback. |
 | `autosave_enabled` | `bool` | Default `True`. |
-| `autosave_interval_seconds` | `int` | Default `60`. |
+| `autosave_interval_seconds` | positive `int` | Default `60`. |
 | `exercises_toml_path` | `str \| None` | Path to the source exercise catalog. |
 
 ### `StudentSolution`

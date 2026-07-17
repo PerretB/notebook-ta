@@ -42,7 +42,6 @@ def make_exercise(
         prompts=PromptConfig(
             on_success="s",
             on_failure="f",
-            on_hints="h",
             on_no_llm="n",
         ),
         unit_test_timeout=global_timeout,

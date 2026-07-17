@@ -38,6 +38,13 @@ def make_snapshot(statement: str = "stmt", code: str = "code") -> InputSnapshot:
 
 
 class TestBenchProjectHelpers:
+    def test_autosave_interval_must_be_positive(self) -> None:
+        with pytest.raises(ValueError, match="autosave_interval_seconds"):
+            BenchSettings(
+                internal_model=make_settings().internal_model,
+                autosave_interval_seconds=0,
+            )
+
     def test_tag_colors_have_defaults_and_safe_fallback(self) -> None:
         settings = make_settings()
 
