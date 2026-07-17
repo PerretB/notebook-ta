@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable
+from types import SimpleNamespace
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
+
+from IPython.core.interactiveshell import InteractiveShell
 
 from notebook_ta.config.models import ExerciseConfig, GlobalConfig, LLMConfig, PromptConfig
 from notebook_ta.exercise.definition import Exercise
@@ -42,7 +45,9 @@ def make_ip_stub(user_ns: dict | None = None) -> MagicMock:
     """Create a minimal IPython stub."""
     ip = MagicMock()
     ip.user_ns = user_ns or {"add": lambda a, b: a + b}
-    ip.run_cell = MagicMock()
+    ip.run_cell = MagicMock(
+        return_value=SimpleNamespace(error_before_exec=None, error_in_exec=None)
+    )
     return ip
 
 
@@ -150,6 +155,48 @@ class TestCellMagicSomeFail:
 
         mock_display.display_test_results.assert_called_once_with(failing_results)
         mock_display.display_hints_button.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Cell magic — student-code execution fails
+# ---------------------------------------------------------------------------
+
+class TestCellExecutionFailure:
+    @patch("notebook_ta.notebook.magic.display")
+    def test_syntax_error_stops_tests_and_llm_with_stale_symbol_present(
+        self, mock_display
+    ) -> None:
+        shell = InteractiveShell()
+        shell.run_cell("def add(a, b):\n    return a + b")
+        stale_add = shell.user_ns["add"]
+        magic = make_magic(ip=cast(MagicMock, shell))
+
+        with patch.object(magic._runner, "run") as run_tests:
+            magic.notebook_ta("ex1", "def add(a, b)\n    return a - b")
+
+        assert shell.user_ns["add"] is stale_add
+        run_tests.assert_not_called()
+        magic._llm.is_available.assert_not_called()
+        error = mock_display.display_execution_failure.call_args.args[0]
+        assert isinstance(error, SyntaxError)
+
+    @patch("notebook_ta.notebook.magic.display")
+    def test_runtime_error_stops_tests_and_llm_with_stale_symbol_present(
+        self, mock_display
+    ) -> None:
+        shell = InteractiveShell()
+        shell.run_cell("def add(a, b):\n    return a + b")
+        stale_add = shell.user_ns["add"]
+        magic = make_magic(ip=cast(MagicMock, shell))
+
+        with patch.object(magic._runner, "run") as run_tests:
+            magic.notebook_ta("ex1", "raise RuntimeError('broken submission')")
+
+        assert shell.user_ns["add"] is stale_add
+        run_tests.assert_not_called()
+        magic._llm.is_available.assert_not_called()
+        error = mock_display.display_execution_failure.call_args.args[0]
+        assert isinstance(error, RuntimeError)
 
 
 # ---------------------------------------------------------------------------

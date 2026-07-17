@@ -25,6 +25,10 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "display_hints_busy_button": "Computing... please wait",
         "display_hints_button": "Give me hints",
         "display_hints_fetching": "Fetching hints...",
+        "display_execution_failure_heading": "Code execution failed",
+        "display_execution_failure_detail": (
+            "Tests and LLM analysis were not run. Fix the error and run the cell again."
+        ),
         "display_hints_tooltip": "Ask the LLM for targeted hints",
         "display_llm_answer_prefix": "🤖",
         "display_llm_unavailable_heading": "LLM unavailable",
@@ -114,6 +118,11 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "display_hints_busy_button": "Requête en cours, patientez...",
         "display_hints_button": "Donnez-moi un indice",
         "display_hints_fetching": "Recherche des indices...",
+        "display_execution_failure_heading": "Échec de l'exécution du code",
+        "display_execution_failure_detail": (
+            "Les tests et l'analyse LLM n'ont pas été lancés. "
+            "Corrigez l'erreur et exécutez à nouveau la cellule."
+        ),
         "display_hints_tooltip": "Demander des indices.",
         "display_llm_answer_prefix": "🤖",
         "display_llm_unavailable_heading": "LLM indisponible",
