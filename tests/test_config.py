@@ -180,6 +180,72 @@ class TestLoadGlobal:
                 }
             )
 
+    @pytest.mark.parametrize(
+        ("original", "replacement", "expected"),
+        [
+            ('provider = "ollama"', 'provider = "typo"', "provider"),
+            ("timeout = 60", "timeout = -1", "timeout"),
+            ("timeout = 60", "timeout = 60\ntemperature = 2.1", "temperature"),
+            (
+                'base_url = "http://localhost:11434"',
+                'base_url = "localhost:11434"',
+                "base_url",
+            ),
+            ('model = "llama3.2:3b"', 'model = "   "', "model"),
+            ("hint_history_length = 3", "hint_history_length = -1", "hint_history_length"),
+        ],
+    )
+    def test_invalid_values_fail_during_load(
+        self, tmp_path: Path, original: str, replacement: str, expected: str
+    ) -> None:
+        content = GLOBAL_TOML_CONTENT.replace(original, replacement, 1)
+        path = tmp_path / "invalid-value.toml"
+        path.write_text(content, encoding="utf-8")
+
+        with pytest.raises(ConfigurationError, match=expected):
+            load_global(path)
+
+    def test_misspelled_llm_field_is_rejected(self, tmp_path: Path) -> None:
+        content = GLOBAL_TOML_CONTENT.replace("timeout = 60", "timeuot = 60")
+        path = tmp_path / "misspelled-field.toml"
+        path.write_text(content, encoding="utf-8")
+
+        with pytest.raises(ConfigurationError, match="timeuot"):
+            load_global(path)
+
+    def test_unknown_global_field_is_rejected(self, tmp_path: Path) -> None:
+        path = tmp_path / "unknown-global-field.toml"
+        path.write_text(f"unexpected = true\n{GLOBAL_TOML_CONTENT}", encoding="utf-8")
+
+        with pytest.raises(ConfigurationError, match="unexpected"):
+            load_global(path)
+
+    def test_auto_model_requires_candidates(self, tmp_path: Path) -> None:
+        content = textwrap.dedent("""\
+            [llm]
+            provider = "ollama"
+            model = "auto"
+            base_url = "http://localhost:11434"
+
+            [prompts]
+            on_success = "Great job!"
+            on_failure = "Try again."
+            on_no_llm = "LLM unavailable."
+        """)
+        path = tmp_path / "auto-without-candidates.toml"
+        path.write_text(content, encoding="utf-8")
+
+        with pytest.raises(ConfigurationError, match="available_models"):
+            load_global(path)
+
+    def test_negative_model_hardware_requirement_is_rejected(self, tmp_path: Path) -> None:
+        content = GLOBAL_TOML_CONTENT.replace("min_ram_gb = 4.0", "min_ram_gb = -1")
+        path = tmp_path / "negative-hardware.toml"
+        path.write_text(content, encoding="utf-8")
+
+        with pytest.raises(ConfigurationError, match="min_ram_gb"):
+            load_global(path)
+
 
 # ---------------------------------------------------------------------------
 # ExerciseConfig loading
@@ -290,6 +356,30 @@ class TestLoadExercises:
 
         assert cfg.language == "en"
         assert "Unsupported language 'zz' requested" in caplog.text
+
+    def test_unknown_exercise_field_is_rejected(self, tmp_path: Path) -> None:
+        path = tmp_path / "unknown-exercise-field.toml"
+        path.write_text(
+            "[exercises.ex1]\nstatement = 'Solve it.'\nexpected_output = '42'\n",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(ConfigurationError, match="expected_output"):
+            load_exercises(path)
+
+    def test_unknown_exercises_top_level_field_is_rejected(self, tmp_path: Path) -> None:
+        path = tmp_path / "unknown-top-level.toml"
+        path.write_text("metadata = 'unexpected'\n[exercises.ex1]\n", encoding="utf-8")
+
+        with pytest.raises(ConfigurationError, match="metadata"):
+            load_exercises(path)
+
+    def test_explicit_exercise_id_is_rejected(self, tmp_path: Path) -> None:
+        path = tmp_path / "explicit-id.toml"
+        path.write_text("[exercises.ex1]\nid = 'different'\n", encoding="utf-8")
+
+        with pytest.raises(ConfigurationError, match="derived"):
+            load_exercises(path)
 
 
 # ---------------------------------------------------------------------------

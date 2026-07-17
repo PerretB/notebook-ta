@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from notebook_ta.config.models import LLMConfig
 from notebook_ta.llm.base import create_provider
@@ -52,9 +53,8 @@ class TestCreateProvider:
         assert isinstance(provider, OpenAICompatProvider)
 
     def test_unknown_provider_raises(self) -> None:
-        cfg = make_ollama_config(provider="unknown_provider")
-        with pytest.raises(ValueError, match="Unknown LLM provider"):
-            create_provider(cfg)
+        with pytest.raises(ValidationError, match="provider"):
+            make_ollama_config(provider="unknown_provider")
 
 
 # ---------------------------------------------------------------------------

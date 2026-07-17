@@ -76,4 +76,4 @@ environment whenever you reopen the project and run that model.
 Everything (settings, per-exercise setup code, student solutions, prompt version history, and the
 full execution history with metrics) is saved to a single JSON project file via the **Save** button
 or autosave. API key values are excluded; project files contain only their environment-variable
-references.
+references. The autosave interval must be a positive number of seconds.

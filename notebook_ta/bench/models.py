@@ -53,7 +53,7 @@ class BenchSettings(BaseModel):
     known_tags: list[str] = Field(default_factory=lambda: list(DEFAULT_SOLUTION_TAGS))
     tag_colors: dict[str, str] = Field(default_factory=lambda: dict(DEFAULT_TAG_COLORS))
     autosave_enabled: bool = True
-    autosave_interval_seconds: int = 60
+    autosave_interval_seconds: int = Field(default=60, gt=0)
     exercises_toml_path: str | None = None
 
     def color_for_tag(self, tag: str) -> str:

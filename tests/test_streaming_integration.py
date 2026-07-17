@@ -43,7 +43,6 @@ def make_global_config() -> GlobalConfig:
         prompts=PromptConfig(
             on_success="Good job.",
             on_failure="Try again.",
-            on_hints="Here is a hint.",
             on_no_llm="LLM unavailable.",
             hint_history_length=3,
         ),
