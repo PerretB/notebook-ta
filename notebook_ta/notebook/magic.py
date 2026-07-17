@@ -69,7 +69,18 @@ class NotebookTAMagic(Magics):
         display.set_hint_buttons_busy(True)
         try:
             # 2. Execute the student's code in the user namespace.
-            cast(Any, self.shell.run_cell)(cell)
+            execution_result = cast(Any, self.shell.run_cell)(cell)
+            execution_error = (
+                execution_result.error_before_exec or execution_result.error_in_exec
+            )
+            if execution_error is not None:
+                _log.debug(
+                    "Student code execution failed for %r: %s",
+                    exercise_id,
+                    execution_error,
+                )
+                display.display_execution_failure(execution_error)
+                return
 
             # 3. Run unit tests
             results = self._runner.run(exercise, self.shell.user_ns)

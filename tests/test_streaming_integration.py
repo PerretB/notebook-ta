@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 from collections.abc import AsyncIterator
 from unittest.mock import MagicMock, patch
 
@@ -61,7 +62,9 @@ def make_ip_stub(user_ns: dict | None = None) -> MagicMock:
     """Create a minimal IPython stub."""
     ip = MagicMock()
     ip.user_ns = user_ns or {"add": lambda a, b: a + b}
-    ip.run_cell = MagicMock()
+    ip.run_cell = MagicMock(
+        return_value=SimpleNamespace(error_before_exec=None, error_in_exec=None)
+    )
     return ip
 
 

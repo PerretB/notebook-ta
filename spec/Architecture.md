@@ -375,8 +375,10 @@ Execution steps:
 2. Reserve the `NotebookTAMagic` instance's in-process busy guard; if another
    notebook-ta operation is already running, call `display.display_busy_message()` and return
 3. Disable all registered hint buttons and set their label to `"Busy"`
-4. Execute `cell` in the IPython user namespace via `ip.run_cell(cell)`
-5. Run `TestRunner.run(exercise, ip.user_ns)`
+4. Execute `cell` in the IPython user namespace via `ip.run_cell(cell)` and inspect the returned
+   `ExecutionResult`. If `error_before_exec` or `error_in_exec` is set, display the execution
+   failure and stop without running tests or contacting the LLM.
+5. Run `TestRunner.run(exercise, ip.user_ns)` only after successful cell execution
 6. Branch on results:
    - **All pass** → `display.display_success()` + stream LLM success analysis
    - **Any fail** → `display.display_test_results(results)` + `display.display_hints_button()`
@@ -428,6 +430,7 @@ All display functions use `IPython.display` and `ipywidgets`.
 | Function                              | Output                                                                   |
 |---------------------------------------|--------------------------------------------------------------------------|
 | `display_success()`                   | "✅ Tests passed" indicator before streaming begins                      |
+| `display_execution_failure(error)`   | Compilation/runtime failure; tests and LLM analysis are skipped          |
 | `display_test_results(results)`       | Formatted list of test names with pass/fail status and messages          |
 | `display_hints_button(exercise_id, callback)` | `ipywidgets.Button` labeled "💡 Give me hints"               |
 | `display_no_llm_message(message)`     | Renders the configured `on_no_llm` string as `IPython.display.Markdown` |

@@ -278,6 +278,21 @@ def display_success() -> None:
     cast(Any, ipydisplay.display)(cast(Any, ipydisplay.Markdown)(translate("display_success")))
 
 
+def display_execution_failure(error: BaseException) -> None:
+    """Show that student-code execution failed before tests could run.
+
+    Args:
+        error: Compilation or runtime error reported by IPython.
+    """
+    detail = html.escape(f"{type(error).__name__}: {error}")
+    content = (
+        f'<h3 style="margin-bottom: 0.4em">{translate("display_execution_failure_heading")}</h3>'
+        f'<div style="white-space: pre-wrap; font-family: monospace">{detail}</div>'
+        f'<p>{translate("display_execution_failure_detail")}</p>'
+    )
+    cast(Any, ipydisplay.display)(cast(Any, ipydisplay.HTML)(content))
+
+
 def display_test_results(results: list[TestResult]) -> None:
     """Render a formatted list of test results.
 
