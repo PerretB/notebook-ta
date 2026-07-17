@@ -6,7 +6,7 @@ import asyncio
 from collections.abc import Awaitable
 from types import SimpleNamespace
 from typing import cast
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 from IPython.core.interactiveshell import InteractiveShell
 
@@ -362,6 +362,51 @@ class TestHintHistory:
             assert await task is True
 
         assert task not in magic._background_tasks
+
+    @patch("notebook_ta.notebook.magic.display")
+    async def test_running_hint_rejects_overlapping_cell_and_hint_requests(
+        self,
+        mock_display: MagicMock,
+    ) -> None:
+        """An active hint must retain exclusive ownership until its stream finishes."""
+        ip = make_ip_stub()
+        magic = make_magic(ip=ip)
+        failing_results = [TestResult("t", False)]
+        stream_started = asyncio.Event()
+        release_stream = asyncio.Event()
+
+        async def _stream_to_output(_stream: object) -> str:
+            stream_started.set()
+            await release_stream.wait()
+            return "Hint response"
+
+        with patch(
+            "notebook_ta.notebook.magic.stream_to_output",
+            side_effect=_stream_to_output,
+        ) as mock_stream:
+            first_hint = magic._hint_callback("ex1", "student code", failing_results)
+            assert isinstance(first_hint, Awaitable)
+            await stream_started.wait()
+
+            magic.notebook_ta("ex1", "def add(a,b): return 0")
+            second_hint = magic._hint_callback("ex1", "student code", failing_results)
+
+            assert second_hint is False
+            assert ip.run_cell.call_count == 0
+            mock_display.display_busy_message.assert_called_once_with()
+            assert mock_display.set_hint_buttons_busy.call_args_list == [
+                call(True)
+            ]
+            assert mock_stream.call_count == 1
+
+            release_stream.set()
+            assert await cast(Awaitable[bool], first_hint) is True
+            await asyncio.sleep(0)
+
+        assert mock_display.set_hint_buttons_busy.call_args_list == [
+            call(True),
+            call(False),
+        ]
 
     def test_hint_deque_truncates_at_limit(self) -> None:
         session = SessionState(hint_history_length=2)
