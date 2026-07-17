@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 from collections.abc import Awaitable, Coroutine
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 
@@ -45,6 +46,7 @@ class NotebookTAMagic(Magics):
         self._runner = TestRunner()
         self._debug = debug
         self._background_tasks: set[asyncio.Task[Any]] = set()
+        self._operation_busy = False
 
     @cell_magic
     def notebook_ta(self, line: str, cell: str) -> None:
@@ -66,7 +68,11 @@ class NotebookTAMagic(Magics):
             display.display_unavailable_message(exercise_id)
             return
 
-        display.set_hint_buttons_busy(True)
+        if not self._try_start_operation():
+            display.display_busy_message()
+            return
+
+        finish_deferred = False
         try:
             # 2. Execute the student's code in the user namespace.
             execution_result = cast(Any, self.shell.run_cell)(cell)
@@ -94,7 +100,13 @@ class NotebookTAMagic(Magics):
 
             if all_passed:
                 display.display_success()
-                self._trigger_llm(exercise_id, cell, results, hint_history=None)
+                response = self._trigger_llm(
+                    exercise_id,
+                    cell,
+                    results,
+                    hint_history=None,
+                )
+                finish_deferred = self._finish_operation_after(response)
             else:
                 display.display_test_results(results)
                 display.display_hints_button(
@@ -102,7 +114,8 @@ class NotebookTAMagic(Magics):
                     callback=lambda eid: self._hint_callback(eid, cell, results),
                 )
         finally:
-            display.set_hint_buttons_busy(False)
+            if not finish_deferred:
+                self._finish_operation()
 
     def _trigger_llm(
         self,
@@ -150,6 +163,25 @@ class NotebookTAMagic(Magics):
         test_results: list[TestResult],
     ) -> Awaitable[bool | None] | bool | None:
         """Handle a hint button click: build hint prompt, stream, and save to history."""
+        if not self._try_start_operation():
+            return False
+
+        finish_deferred = False
+        try:
+            result = self._start_hint_request(exercise_id, student_code, test_results)
+            finish_deferred = self._finish_operation_after(result)
+            return result
+        finally:
+            if not finish_deferred:
+                self._finish_operation()
+
+    def _start_hint_request(
+        self,
+        exercise_id: str,
+        student_code: str,
+        test_results: list[TestResult],
+    ) -> Awaitable[bool | None] | bool | None:
+        """Build, schedule, and record an accepted hint request."""
         exercise = self._registry.get(exercise_id)
         hint_history = self._session.get_history(
             exercise_id,
@@ -187,6 +219,38 @@ class NotebookTAMagic(Magics):
             return True
 
         return self._schedule_coroutine(_run())
+
+    def _try_start_operation(self) -> bool:
+        """Reserve the single notebook operation slot if it is available."""
+        if self._operation_busy:
+            return False
+        self._operation_busy = True
+        display.set_hint_buttons_busy(True)
+        return True
+
+    def _finish_operation(self) -> None:
+        """Release the notebook operation slot and restore all hint buttons."""
+        if not self._operation_busy:
+            return
+        self._operation_busy = False
+        display.set_hint_buttons_busy(False)
+
+    def _finish_operation_after(self, result: object) -> bool:
+        """Release the operation slot when an asynchronous result completes."""
+        if isinstance(result, asyncio.Future):
+            result.add_done_callback(lambda _future: self._finish_operation())
+            return True
+        if not inspect.isawaitable(result):
+            return False
+
+        async def _wait_for_result() -> None:
+            try:
+                await result
+            finally:
+                self._finish_operation()
+
+        self._schedule_coroutine(_wait_for_result())
+        return True
 
     def _schedule_coroutine(self, coroutine: Coroutine[Any, Any, _T]) -> Awaitable[_T] | _T:
         """Schedule *coroutine* without blocking an already-running event loop."""
