@@ -35,6 +35,16 @@ These decisions were clarified with the project owner and drive the rest of this
 | 4 | Model configuration | **Reuse `notebook_ta.llm`.** Each tested model (and the internal model) is a standard `LLMConfig`, instantiated via the existing `create_provider()` factory. Mixed providers (Ollama + OpenAI-compatible) can be tested in the same run. |
 | 5 | Stale/drift detection scope | **Broad.** The drift hash covers exercise `statement`, `expected_output`, `additional_info`, the serialized unit test definitions, and the student solution code. Any change to any of these marks a result stale. |
 | 6 | Autosave trigger | **Fixed interval timer** (configurable, default 60s) while autosave is enabled, in addition to the always-available manual "Save" button. |
+
+### Security boundary
+
+The GUI binds to `127.0.0.1` and has no authentication; it is a single-operator local authoring
+tool. Solution, setup, and test code is executed in timeout-bounded workers, not in the NiceGUI
+server process. Workers are not sandboxes: they retain the host user's OS permissions, filesystem,
+environment, and network access, and direct-process termination does not guarantee cleanup of
+descendants. Benchmark projects and exercise catalogs must therefore be trusted unless the whole
+application is run inside an OS-level isolation boundary. See
+[`docs/security.md`](../docs/security.md) for the complete trust and data model.
 | 7 | Throughput metrics | **Provider-reported token counts when available, else word-count approximation.** `LLMProvider` gains an additive `get_last_usage()` hook (see §7). |
 | 8 | CLI project handling | `notebook-ta bench [PROJECT_FILE]` accepts an **optional path argument**; omitted → blank new project. |
 

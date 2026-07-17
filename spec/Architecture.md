@@ -20,6 +20,19 @@ analysis, and displays streaming feedback directly in the notebook output.
 
 **Minimum Python version**: 3.11 (uses `tomllib` from the standard library).
 
+### Trust boundary
+
+The package does not sandbox Python code. Student cells run in the IPython kernel; inline test
+resolution and external test imports can also execute in that process. Test callables and
+benchmark code use timeout-bounded child processes for fault containment, but those processes
+retain the host user's filesystem and network privileges and timeout termination does not
+guarantee descendant-process cleanup. The benchmark listener is loopback-only and unauthenticated.
+
+Course notebooks, exercise/test definitions, benchmark projects, setup code, and solutions must be
+trusted unless the entire kernel/application runs inside a constrained OS account, container, or
+virtual machine. The normative operational guidance and data boundary are documented in
+[`docs/security.md`](../docs/security.md).
+
 ---
 
 ## 2. Package Structure

@@ -280,6 +280,7 @@ See [docs/benchmarking.md](docs/benchmarking.md) for the full workflow.
 - [Configuration reference](docs/configuration.md)
 - [Authoring exercises](docs/authoring_exercises.md)
 - [Benchmarking guide](docs/benchmarking.md)
+- [Trust and security model](docs/security.md)
 - [Example configuration and notebook](docs/examples)
 
 Build the documentation locally with:
