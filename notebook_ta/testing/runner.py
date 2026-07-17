@@ -164,7 +164,7 @@ class TestRunner:
     def _resolve(test_def: TestDefinition, language: str) -> Callable[..., Any]:
         """Return the callable for a TestDefinition."""
         if test_def.code is not None:
-            # Inline source: exec into an isolated namespace
+            # Inline source: use a separate globals dictionary (not a security sandbox).
             local_ns: dict[str, Any] = {}
             exec(test_def.code, local_ns)  # noqa: S102
             # Pick the only callable, or the one named by test_def.function

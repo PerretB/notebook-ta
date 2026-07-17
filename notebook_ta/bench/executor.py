@@ -76,7 +76,8 @@ def _execute_solution_tests(payload: bytes, result_queue: object) -> None:
     try:
         namespace: dict[str, object] = {}
         with extended_sys_path(python_path_dirs):
-            exec(solution_code, namespace)  # noqa: S102 -- isolated benchmark worker
+            # The timeout-bounded worker is fault containment, not a security sandbox.
+            exec(solution_code, namespace)  # noqa: S102
             test_names = [test_def.name for test_def in exercise.tests]
             test_results = run_setup_code(setup_code, namespace, test_names)
             if test_results is None:
@@ -155,7 +156,7 @@ def run_setup_code(
     stdout_buf = io.StringIO()
     try:
         with contextlib.redirect_stdout(stdout_buf):
-            exec(setup_code, namespace)  # noqa: S102 -- isolated authoring-time sandbox
+            exec(setup_code, namespace)  # noqa: S102 -- timeout-bounded worker
     except Exception as exc:
         captured = stdout_buf.getvalue()
         message = str(exc)

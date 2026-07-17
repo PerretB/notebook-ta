@@ -11,6 +11,7 @@ tests, and tutor prompts in TOML files.
 configuration
 authoring_exercises
 benchmarking
+security
 release
 ```
 

@@ -18,6 +18,12 @@ most recent project, browse for another project, or create a new one. New projec
 and an exercises TOML file; the name becomes the suggested JSON filename on first save. Their tag
 list starts with `correct`, `wrong complexity`, `logic flow`, and `missing edge-case`.
 
+The server listens on `127.0.0.1` and has no authentication. It is intended for one trusted local
+operator and must not be exposed through a proxy, tunnel, shared host, or non-loopback bind.
+Editable Python runs in timeout-bounded workers with the host user's permissions; these workers
+are not security sandboxes. Read the [trust and security model](security.md) before using
+third-party projects or student submissions.
+
 ## Workflow
 
 1. **Settings** — configure the *internal model* (used only to help draft example student

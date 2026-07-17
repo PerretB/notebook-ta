@@ -27,6 +27,9 @@ does not break saved solutions or historical benchmark records.
 
 Tests are declared as TOML array tables: `[[exercises.<id>.tests]]`.
 
+Exercise tests are trusted Python. Namespace separation and test timeouts are not a security
+sandbox; see the [trust and security model](security.md) before running third-party material.
+
 ### Inline Tests
 
 Use the `code` field to write a Python function directly in the TOML file:
