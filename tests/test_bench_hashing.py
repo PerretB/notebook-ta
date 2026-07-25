@@ -47,6 +47,16 @@ class TestHashStability:
         changed = compute_exercise_hash(make_exercise(unit_test_timeout=10.0))
         assert original != changed
 
+    def test_prompt_limit_changes_change_hash(self) -> None:
+        original = compute_exercise_hash(make_exercise())
+
+        assert original != compute_exercise_hash(
+            make_exercise(max_student_answer_length=100)
+        )
+        assert original != compute_exercise_hash(
+            make_exercise(max_unit_test_output_length=100)
+        )
+
     def test_test_definitions_change_changes_hash(self) -> None:
         original = compute_exercise_hash(make_exercise())
         changed = compute_exercise_hash(

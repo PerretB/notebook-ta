@@ -63,6 +63,8 @@ Create `global_config.toml` for provider settings and shared tutor prompts:
 
 ```toml
 unit_test_timeout = 5.0
+max_student_answer_length = 10000
+max_unit_test_output_length = 4000
 
 [llm]
 provider = "ollama"
@@ -197,7 +199,7 @@ the largest configured model that fits.
   grading context.
 - Override prompts per exercise with `prompt_on_success` and
   `prompt_on_failure`.
-- Set a global `unit_test_timeout`, then override it per exercise when needed.
+- Set global execution and prompt-size limits, then override them per exercise when needed.
 - Use external tests with `module` and `function` for shared test libraries.
 - Use `student_globals` when a test needs the full notebook namespace.
 

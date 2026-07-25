@@ -140,6 +140,31 @@ statement = "Implement a function that handles a large input."
 unit_test_timeout = 15.0
 ```
 
+### Prompt Size Limits
+
+Two global settings keep student submissions and test diagnostics from producing
+unbounded LLM prompts:
+
+```toml
+max_student_answer_length = 10000
+max_unit_test_output_length = 4000
+```
+
+Both limits count Unicode characters. Student answers longer than
+`max_student_answer_length` are still executed and tested, but notebook-ta emits an error
+and does not contact the LLM. `max_unit_test_output_length` is a shared budget across all
+unit test result messages in configured test order. Output beyond that budget is removed
+and a warning is displayed; test names and pass/fail statuses are retained.
+
+Override either limit for one exercise:
+
+```toml
+[exercises.ex_verbose]
+statement = "Implement the requested reporting function."
+max_student_answer_length = 20000
+max_unit_test_output_length = 8000
+```
+
 ---
 
 ## Exercise-Level Prompt Overrides

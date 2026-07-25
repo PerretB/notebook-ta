@@ -15,7 +15,7 @@ from notebook_ta.bench.ui.tag_badges import render_tag_badge
 from notebook_ta.config.models import ExerciseConfig, GlobalConfig, PromptConfig
 from notebook_ta.exercise.definition import Exercise
 from notebook_ta.notebook._ansi import ansi_to_html
-from notebook_ta.testing.runner import TestResult
+from notebook_ta.testing.runner import TestResult, TestRunner
 
 
 def build(
@@ -339,7 +339,11 @@ async def _run_solution_tests(
             timeout=state.project.settings.unit_test_timeout,
         )
         error = worker_result.error
-        test_results = worker_result.test_results or []
+        test_results = TestRunner.truncate_output(
+            worker_result.test_results or [],
+            exercise.max_unit_test_output_length,
+            exercise.language,
+        )
     except Exception as exc:  # pragma: no cover - defensive UI feedback
         error = str(exc)
 

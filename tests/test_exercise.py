@@ -47,6 +47,23 @@ def make_exercise(
 # ---------------------------------------------------------------------------
 
 class TestPromptContextSelection:
+    def test_prompt_limits_use_global_defaults_and_exercise_overrides(self) -> None:
+        global_config = make_global_config()
+        global_config.max_student_answer_length = 100
+        global_config.max_unit_test_output_length = 50
+
+        default_exercise = make_exercise(global_config=global_config)
+        overridden_exercise = make_exercise(
+            global_config=global_config,
+            max_student_answer_length=20,
+            max_unit_test_output_length=10,
+        )
+
+        assert default_exercise.max_student_answer_length == 100
+        assert default_exercise.max_unit_test_output_length == 50
+        assert overridden_exercise.max_student_answer_length == 20
+        assert overridden_exercise.max_unit_test_output_length == 10
+
     def test_success_prompt_all_pass(self) -> None:
         ex = make_exercise()
         results = [TestResult(name="t", passed=True)]

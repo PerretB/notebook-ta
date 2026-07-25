@@ -113,6 +113,57 @@ class TestBuildJobs:
 
 class TestBenchExecutorSequential:
     @pytest.mark.asyncio
+    async def test_unit_test_output_is_truncated_before_benchmark_prompt(self) -> None:
+        config = make_exercise(
+            tests=[
+                TestDefinition(
+                    name="verbose",
+                    code='def verbose(add): return False, "abcdefghij"',
+                )
+            ]
+        )
+        config.max_unit_test_output_length = 5
+        job = BenchJob(config, make_solution(), make_model("m1"), make_prompt_version())
+        provider = FakeProvider(["ok"])
+        run = BenchmarkRun(prompt_version_id="V1", model_labels=["m1"], job_count=1)
+        records = []
+
+        def on_progress(job, status, message, record) -> None:
+            if record is not None:
+                records.append(record)
+
+        with patch("notebook_ta.bench.executor.create_provider", return_value=provider):
+            await BenchExecutor().run([job], run, on_progress)
+
+        assert records[0].test_results[0].message == "abcde"
+        assert "abcdefghij" not in records[0].full_prompt
+
+    @pytest.mark.asyncio
+    async def test_oversized_solution_runs_tests_but_skips_llm(self) -> None:
+        config = make_exercise()
+        config.max_student_answer_length = 5
+        job = BenchJob(
+            config,
+            make_solution(code="def add(a, b): return a + b"),
+            make_model("m1"),
+            make_prompt_version(),
+        )
+        provider = FakeProvider(["should not stream"])
+        run = BenchmarkRun(prompt_version_id="V1", model_labels=["m1"], job_count=1)
+        records = []
+
+        def on_progress(job, status, message, record) -> None:
+            if record is not None:
+                records.append(record)
+
+        with patch("notebook_ta.bench.executor.create_provider", return_value=provider):
+            await BenchExecutor().run([job], run, on_progress)
+
+        assert records[0].status == "failed"
+        assert "exceeds the configured maximum" in (records[0].error or "")
+        assert provider.call_count == 0
+
+    @pytest.mark.asyncio
     async def test_jobs_run_one_at_a_time_and_complete(self) -> None:
         config = make_exercise()
         job1 = BenchJob(config, make_solution(), make_model("m1"), make_prompt_version())

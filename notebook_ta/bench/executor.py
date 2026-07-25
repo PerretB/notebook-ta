@@ -36,6 +36,7 @@ from notebook_ta.bench.models import (
 )
 from notebook_ta.config.models import ExerciseConfig, GlobalConfig, PromptConfig
 from notebook_ta.exercise.definition import Exercise
+from notebook_ta.i18n import translate
 from notebook_ta.llm.base import LLMProvider, create_provider
 from notebook_ta.logging import get_logger
 from notebook_ta.testing.runner import TestResult, TestRunner
@@ -81,7 +82,11 @@ def _execute_solution_tests(payload: bytes, result_queue: object) -> None:
             test_names = [test_def.name for test_def in exercise.tests]
             test_results = run_setup_code(setup_code, namespace, test_names)
             if test_results is None:
-                test_results = TestRunner().run(exercise, namespace)
+                test_results = TestRunner().run(
+                    exercise,
+                    namespace,
+                    apply_output_limit=False,
+                )
         result = _BenchmarkTestRunResult(test_results=test_results)
     except Exception as exc:
         result = _BenchmarkTestRunResult(error=str(exc))
@@ -320,7 +325,23 @@ class BenchExecutor:
             if worker_result.error is not None:
                 raise RuntimeError(worker_result.error)
             assert worker_result.test_results is not None
-            test_results = worker_result.test_results
+            test_results = TestRunner.truncate_output(
+                worker_result.test_results,
+                exercise.max_unit_test_output_length,
+                exercise.language,
+            )
+            answer_length = len(job.solution.code)
+            if answer_length > exercise.max_student_answer_length:
+                raise ValueError(
+                    translate(
+                        "magic_student_answer_too_long",
+                        {
+                            "answer_length": answer_length,
+                            "max_length": exercise.max_student_answer_length,
+                        },
+                        language=exercise.language,
+                    )
+                )
             prompt = exercise.build_prompt(job.solution.code, test_results, hint_history=None)
 
             provider = self._get_provider(job.model)

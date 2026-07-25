@@ -18,9 +18,12 @@ import cloudpickle  # type: ignore[import-untyped]
 
 from notebook_ta.config.models import TestDefinition
 from notebook_ta.i18n import translate
+from notebook_ta.logging import get_logger
 
 if TYPE_CHECKING:
     from notebook_ta.exercise.definition import Exercise
+
+_log = get_logger("testing.runner")
 
 
 def _execute_test_callable(payload: bytes, result_queue: Any) -> None:
@@ -47,12 +50,21 @@ class TestResult:
 class TestRunner:
     """Executes the unit tests defined for an exercise."""
 
-    def run(self, exercise: Exercise, namespace: dict[str, Any]) -> list[TestResult]:
+    def run(
+        self,
+        exercise: Exercise,
+        namespace: dict[str, Any],
+        *,
+        apply_output_limit: bool = True,
+    ) -> list[TestResult]:
         """Run all tests for the exercise against the given namespace.
 
         Args:
             exercise: The Exercise whose tests are to be run.
             namespace: The IPython user namespace containing the student's definitions.
+            apply_output_limit: Whether to apply the exercise's cumulative output limit.
+                Benchmark workers disable this so the parent process can truncate and emit
+                the warning where it is visible.
 
         Returns:
             List of TestResult objects.
@@ -67,6 +79,41 @@ class TestRunner:
                     exercise.language,
                 )
             )
+        if apply_output_limit:
+            return self.truncate_output(
+                results,
+                exercise.max_unit_test_output_length,
+                exercise.language,
+            )
+        return results
+
+    @staticmethod
+    def truncate_output(
+        results: list[TestResult], max_length: int, language: str
+    ) -> list[TestResult]:
+        """Truncate cumulative test-result messages to ``max_length`` characters.
+
+        Results are processed in their configured order. Statuses and test names are
+        retained; only the optional message strings consume the shared output budget.
+        """
+        original_length = sum(len(result.message or "") for result in results)
+        if original_length <= max_length:
+            return results
+
+        remaining = max_length
+        for result in results:
+            if not result.message:
+                continue
+            result.message = result.message[:remaining] or None
+            remaining -= len(result.message or "")
+
+        _log.warning(
+            translate(
+                "runner_output_truncated",
+                {"original_length": original_length, "max_length": max_length},
+                language=language,
+            )
+        )
         return results
 
     def _run_one(

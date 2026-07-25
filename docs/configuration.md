@@ -95,6 +95,8 @@ requirements are met by the detected hardware. At least one candidate is require
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `unit_test_timeout` | number | `5.0` | Maximum wall-clock seconds allowed for each configured unit test. Timed-out tests are cancelled and reported as failures. |
+| `max_student_answer_length` | positive integer | `10000` | Maximum student answer length in characters. Longer answers still execute and are tested, but are not sent to the LLM. |
+| `max_unit_test_output_length` | positive integer | `4000` | Maximum cumulative length of unit test messages in characters. Excess output is truncated in test order. |
 
 ### Internationalization
 
@@ -116,6 +118,8 @@ Each exercise is declared under `[exercises.<id>]`.
 | `additional_info` | string | ❌ | Any other context for the LLM |
 | `prompt_on_success` | string | ❌ | Overrides global `on_success` |
 | `unit_test_timeout` | number | optional | Overrides the global unit test timeout for this exercise |
+| `max_student_answer_length` | positive integer | optional | Overrides the global student answer length limit |
+| `max_unit_test_output_length` | positive integer | optional | Overrides the global cumulative unit test output limit |
 | `prompt_on_failure` | string | ❌ | Overrides global `on_failure` |
 
 > **Note** — either `statement` in the TOML *or* a `<div id="<id>">` block in the notebook markdown must be provided for every exercise.  If neither is present, `notebook_ta.load()` raises a `ConfigurationError`.
@@ -140,6 +144,8 @@ Exactly one of `code` or (`module` + `function`) must be specified.
 
 ```toml
 unit_test_timeout = 5.0
+max_student_answer_length = 10000
+max_unit_test_output_length = 4000
 language = "en"
 
 [llm]

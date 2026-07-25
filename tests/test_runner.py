@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 import time
+from unittest.mock import patch
 
 from notebook_ta.config.models import (
     ExerciseConfig,
@@ -14,7 +15,7 @@ from notebook_ta.config.models import (
 )
 from notebook_ta.exercise.definition import Exercise
 from notebook_ta.i18n import translate
-from notebook_ta.testing.runner import TestRunner
+from notebook_ta.testing.runner import TestResult, TestRunner
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -29,6 +30,8 @@ def make_exercise(
     *,
     global_timeout: float = 5.0,
     exercise_timeout: float | None = None,
+    global_output_limit: int = 4_000,
+    exercise_output_limit: int | None = None,
     language: str = "en",
 ) -> Exercise:
     cfg = ExerciseConfig(
@@ -36,6 +39,7 @@ def make_exercise(
         statement="Test exercise",
         tests=tests,
         unit_test_timeout=exercise_timeout,
+        max_unit_test_output_length=exercise_output_limit,
     )
     global_cfg = GlobalConfig(
         llm=LLMConfig(provider="ollama", model="llama3.2:3b", base_url="http://localhost:11434"),
@@ -45,6 +49,7 @@ def make_exercise(
             on_no_llm="n",
         ),
         unit_test_timeout=global_timeout,
+        max_unit_test_output_length=global_output_limit,
         language=language,
     )
     return Exercise(config=cfg, global_config=global_cfg)
@@ -125,6 +130,46 @@ class TestStdoutCapture:
         results = make_runner().run(ex, {"add": lambda a, b: a + b})
         assert results[0].passed is True
         assert "checking add" in (results[0].message or "")
+
+
+class TestOutputTruncation:
+    @patch("notebook_ta.testing.runner._log")
+    def test_cumulative_messages_are_truncated_in_test_order(self, mock_log) -> None:
+        results = [
+            TestResult(name="first", passed=False, message="abcdef"),
+            TestResult(name="second", passed=False, message="ghijkl"),
+        ]
+
+        returned = TestRunner.truncate_output(results, max_length=8, language="en")
+
+        assert returned is results
+        assert results[0].message == "abcdef"
+        assert results[1].message == "gh"
+        assert sum(len(result.message or "") for result in results) == 8
+        mock_log.warning.assert_called_once()
+
+    @patch("notebook_ta.testing.runner._log")
+    def test_exercise_override_limits_captured_test_output(self, mock_log) -> None:
+        code = 'def noisy(add): print("abcdefghij"); return False'
+        exercise = make_exercise(
+            [TestDefinition(name="noisy", code=code)],
+            global_output_limit=100,
+            exercise_output_limit=5,
+        )
+
+        results = make_runner().run(exercise, {"add": lambda a, b: a + b})
+
+        assert results[0].message == "abcde"
+        mock_log.warning.assert_called_once()
+
+    @patch("notebook_ta.testing.runner._log")
+    def test_output_at_limit_is_not_truncated(self, mock_log) -> None:
+        results = [TestResult(name="test", passed=False, message="1234")]
+
+        TestRunner.truncate_output(results, max_length=4, language="en")
+
+        assert results[0].message == "1234"
+        mock_log.warning.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
