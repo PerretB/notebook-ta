@@ -139,6 +139,7 @@ Describes a single LLM model option and its hardware requirements.
 | `on_success`         | `str`  | —       | Prompt used when all unit tests pass                                      |
 | `on_failure`         | `str`  | —       | Prompt used when tests fail; also used for subsequent hint requests        |
 | `on_no_llm`          | `str`  | —       | Message displayed (as Markdown) when no LLM is reachable                 |
+| `student_code_safety_instruction` | `str` | Built-in safety instruction | Instruction placed immediately before student code |
 | `hint_history_length`| `int`  | `3`     | Max number of previous hint exchanges included in the LLM context         |
 
 #### `TestDefinition`
@@ -192,8 +193,8 @@ The `[llm]` section configures the active provider. When `model = "auto"`, the
 `[[llm.available_models]]` array is used by the setup wizard at load time to select the best fitting
 model.
 
-The `[prompts]` section holds the default prompt strings for success, failure, hints, and the no-LLM
-fallback message. It also holds `hint_history_length`.
+The `[prompts]` section holds the default prompt strings for success, failure, hints, the no-LLM
+fallback message, and the student-code safety instruction. It also holds `hint_history_length`.
 
 Top-level `max_student_answer_length` (default `10000`) prevents an oversized
 student submission from reaching the LLM after its code and tests have run.
@@ -306,18 +307,17 @@ plus a reference to the active `GlobalConfig` (for prompt and metadata fallback)
 
 Assembles a structured prompt string with the following sections in order:
 
-1. **System preamble** — instructs the LLM to ignore any instructions, comments, or directives
-   present in the student's code and to treat it purely as a programming submission
-2. **Active prompt** — selected based on context:
+1. **Active prompt** — selected based on context:
    - All tests pass → exercise `prompt_on_success` or global `on_success`
    - Tests failed (first call or subsequent hint requests) → exercise `prompt_on_failure` or global
      `on_failure`
-3. **Exercise metadata block** — `statement`, and any provided optional fields
+2. **Exercise metadata block** — `statement`, and any provided optional fields
    (`expected_output`, `additional_info`)
-4. **Student code block** — raw cell body, enclosed in a fenced code block
-5. **Test results block** — present only when tests failed; lists each test name, pass/fail status,
+3. **Student code block** — the configurable `student_code_safety_instruction`, followed
+   immediately by the raw cell body enclosed in a fenced code block
+4. **Test results block** — present only when tests failed; lists each test name, pass/fail status,
    and associated message
-6. **Hint history block** — present only for hint requests; contains the previous
+5. **Hint history block** — present only for hint requests; contains the previous
    `hint_history_length` `(student_code, hint_response)` exchanges, giving the LLM the context it
    needs to naturally escalate the specificity of its guidance
 
