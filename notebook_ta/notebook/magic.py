@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, TypeVar, cast
 from IPython.core.magic import Magics, cell_magic, magics_class
 
 from notebook_ta.exercise.registry import ExerciseNotFoundError, ExerciseRegistry
+from notebook_ta.i18n import translate
 from notebook_ta.logging import get_logger
 from notebook_ta.notebook import display
 from notebook_ta.notebook.session import HintExchange, SessionState
@@ -95,6 +96,10 @@ class NotebookTAMagic(Magics):
                 "Tests complete for %r: %d/%d passed", exercise_id, passed_count, len(results)
             )
 
+            if self._reject_oversized_answer(exercise_id, cell):
+                display.display_test_results(results)
+                return
+
             # 4. Branch on pass/fail
             all_passed = all(r.passed for r in results)
 
@@ -125,6 +130,9 @@ class NotebookTAMagic(Magics):
         hint_history: list[HintExchange] | None,
     ) -> Awaitable[str | None] | str | None:
         """Build a prompt and schedule LLM response streaming."""
+        if self._reject_oversized_answer(exercise_id, student_code):
+            return None
+
         if not self._llm.is_available():
             exercise = self._registry.get(exercise_id)
             display.display_no_llm_message(
@@ -183,6 +191,9 @@ class NotebookTAMagic(Magics):
     ) -> Awaitable[bool | None] | bool | None:
         """Build, schedule, and record an accepted hint request."""
         exercise = self._registry.get(exercise_id)
+        if self._reject_oversized_answer(exercise_id, student_code):
+            return True
+
         hint_history = self._session.get_history(
             exercise_id,
             exercise._global.prompts.hint_history_length,
@@ -219,6 +230,24 @@ class NotebookTAMagic(Magics):
             return True
 
         return self._schedule_coroutine(_run())
+
+    def _reject_oversized_answer(self, exercise_id: str, student_code: str) -> bool:
+        """Emit an error and reject LLM use when a student answer exceeds its limit."""
+        exercise = self._registry.get(exercise_id)
+        answer_length = len(student_code)
+        if answer_length <= exercise.max_student_answer_length:
+            return False
+        _log.error(
+            translate(
+                "magic_student_answer_too_long",
+                {
+                    "answer_length": answer_length,
+                    "max_length": exercise.max_student_answer_length,
+                },
+                language=exercise.language,
+            )
+        )
+        return True
 
     def _try_start_operation(self) -> bool:
         """Reserve the single notebook operation slot if it is available."""

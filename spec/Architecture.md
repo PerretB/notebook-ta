@@ -166,7 +166,9 @@ The two namespace export fields are mutually exclusive.
 | `additional_info`  | `str \| None`           | Any other relevant context for the LLM                |
 | `prompt_on_success`| `str \| None`           | Overrides global `prompts.on_success`                 |
 | `prompt_on_failure`| `str \| None`           | Overrides global `prompts.on_failure`                 |
-
+| `unit_test_timeout` | `float \| None` | Overrides the global per-test timeout |
+| `max_student_answer_length` | `int \| None` | Overrides the global answer limit |
+| `max_unit_test_output_length` | `int \| None` | Overrides the global cumulative test-message limit |
 | `tests`            | `list[TestDefinition]`  | Unit tests for this exercise                          |
 
 #### `GlobalConfig`
@@ -175,6 +177,10 @@ The two namespace export fields are mutually exclusive.
 |-----------|----------------|
 | `llm`     | `LLMConfig`    |
 | `prompts` | `PromptConfig` |
+| `unit_test_timeout` | `float` |
+| `max_student_answer_length` | `int` |
+| `max_unit_test_output_length` | `int` |
+| `language` | `str` |
 
 ### 3.2 TOML Format Reference
 
@@ -188,6 +194,12 @@ model.
 
 The `[prompts]` section holds the default prompt strings for success, failure, hints, and the no-LLM
 fallback message. It also holds `hint_history_length`.
+
+Top-level `max_student_answer_length` (default `10000`) prevents an oversized
+student submission from reaching the LLM after its code and tests have run.
+`max_unit_test_output_length` (default `4000`) bounds the cumulative
+`TestResult.message` content retained for notebook display and prompt construction.
+Exercises can override either positive integer limit.
 
 **`exercises.toml`** — Exercise definitions and their unit tests.
 

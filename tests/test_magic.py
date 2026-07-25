@@ -94,6 +94,32 @@ class TestMagicRegistration:
 # ---------------------------------------------------------------------------
 
 class TestCellMagicAllPass:
+    @patch("notebook_ta.notebook.magic._log")
+    @patch("notebook_ta.notebook.magic.display")
+    def test_oversized_answer_runs_tests_but_skips_llm(
+        self, mock_display, mock_log
+    ) -> None:
+        ip = make_ip_stub()
+        global_config = make_global_config()
+        global_config.max_student_answer_length = 5
+        exercise = Exercise(
+            ExerciseConfig(id="ex1", statement="Write an add function."),
+            global_config,
+        )
+        magic = make_magic(ip=ip, exercises=[exercise])
+        results = [TestResult("t", True)]
+
+        with patch.object(magic._runner, "run", return_value=results) as run_tests:
+            magic.notebook_ta("ex1", "answer")
+
+        ip.run_cell.assert_called_once_with("answer")
+        run_tests.assert_called_once()
+        mock_display.display_test_results.assert_called_once_with(results)
+        mock_display.display_success.assert_not_called()
+        mock_display.display_hints_button.assert_not_called()
+        magic._llm.is_available.assert_not_called()
+        mock_log.error.assert_called_once()
+
     @patch("notebook_ta.notebook.magic.display")
     @patch("notebook_ta.notebook.magic.stream_to_output", new_callable=AsyncMock)
     def test_display_success_called(self, mock_stream, mock_display) -> None:

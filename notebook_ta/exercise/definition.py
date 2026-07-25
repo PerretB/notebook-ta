@@ -61,6 +61,26 @@ class Exercise:
         return self._config.unit_test_timeout or self._global.unit_test_timeout
 
     @property
+    def max_student_answer_length(self) -> int:
+        """Return the maximum student answer length in characters."""
+        configured = self._config.max_student_answer_length
+        return (
+            configured
+            if configured is not None
+            else self._global.max_student_answer_length
+        )
+
+    @property
+    def max_unit_test_output_length(self) -> int:
+        """Return the cumulative unit test output limit in characters."""
+        configured = self._config.max_unit_test_output_length
+        return (
+            configured
+            if configured is not None
+            else self._global.max_unit_test_output_length
+        )
+
+    @property
     def language(self) -> str:
         """Return the language code configured for user-facing notebook messages."""
         return self._global.language

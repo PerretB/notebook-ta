@@ -34,6 +34,11 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "display_llm_unavailable_heading": "LLM unavailable",
         "display_success": "**✅ All tests passed!** Generating analysis...",
         "display_test_results_heading": "Test Results",
+        "magic_student_answer_too_long": (
+            "Student answer length ({answer_length} characters) exceeds the configured "
+            "maximum ({max_length} characters). Unit tests ran, but no request was sent "
+            "to the LLM."
+        ),
         "display_unavailable": (
             "**Exercise `{exercise_id}` not found.**\n\n"
             "Please check the exercise ID in the magic line and ensure "
@@ -95,6 +100,10 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
             "student defines it before running the tests."
         ),
         "runner_output_label": "Output",
+        "runner_output_truncated": (
+            "Unit test output was truncated from {original_length} to {max_length} "
+            "characters."
+        ),
         "runner_prepare_timeout_failed": (
             "Could not prepare unit test for timeout enforcement: {error}"
         ),
@@ -128,6 +137,11 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "display_llm_unavailable_heading": "LLM indisponible",
         "display_success": "**✅ Tous les tests ont réussi !** Génération de l'analyse...",
         "display_test_results_heading": "Résultats des tests",
+        "magic_student_answer_too_long": (
+            "La longueur de la réponse de l'étudiant ({answer_length} caractères) "
+            "dépasse la limite configurée ({max_length} caractères). Les tests "
+            "unitaires ont été exécutés, mais aucune requête n'a été envoyée au LLM."
+        ),
         "display_unavailable": (
             "**Exercice `{exercise_id}` introuvable.**\n\n"
             "Avez-vous appelé `notebook_ta.load()` ?"
@@ -189,6 +203,10 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "runner_missing_student_name": (
             "Le nom {name!r} n'est pas défini."),
         "runner_output_label": "Sortie",
+        "runner_output_truncated": (
+            "La sortie des tests unitaires a été tronquée de {original_length} à "
+            "{max_length} caractères."
+        ),
         "runner_student_globals_not_configured": (
             "Le test demande 'student_globals', mais sa configuration ne définit pas "
             "'student_symbols' et n'active pas 'export_student_globals'."

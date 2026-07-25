@@ -23,6 +23,8 @@ from notebook_ta.config.models import (
 
 GLOBAL_TOML_CONTENT = textwrap.dedent("""\
     unit_test_timeout = 2.5
+    max_student_answer_length = 12000
+    max_unit_test_output_length = 4500
 
     [llm]
     provider = "ollama"
@@ -54,6 +56,8 @@ EXERCISES_TOML_CONTENT = textwrap.dedent("""\
     [exercises.ex1]
     statement = "Write an add function."
     unit_test_timeout = 1.5
+    max_student_answer_length = 2000
+    max_unit_test_output_length = 500
 
     [[exercises.ex1.tests]]
     name = "Test add(2,3)"
@@ -99,6 +103,8 @@ class TestLoadGlobal:
         assert cfg.llm.timeout == 60
         assert cfg.llm.streaming is True
         assert cfg.unit_test_timeout == 2.5
+        assert cfg.max_student_answer_length == 12_000
+        assert cfg.max_unit_test_output_length == 4_500
         assert cfg.language == "en"
         assert len(cfg.llm.available_models) == 2
         assert cfg.prompts.on_success == "Great job!"
@@ -264,6 +270,8 @@ class TestLoadExercises:
         ex1 = next(e for e in exercises if e.id == "ex1")
         assert ex1.statement == "Write an add function."
         assert ex1.unit_test_timeout == 1.5
+        assert ex1.max_student_answer_length == 2_000
+        assert ex1.max_unit_test_output_length == 500
         assert len(ex1.tests) == 1
         assert ex1.tests[0].code is not None
         assert ex1.tests[0].module is None
@@ -312,6 +320,27 @@ class TestLoadExercises:
         cfg = load_global(f)
 
         assert cfg.unit_test_timeout == 5.0
+        assert cfg.max_student_answer_length == 10_000
+        assert cfg.max_unit_test_output_length == 4_000
+
+    def test_prompt_length_limits_must_be_positive(self) -> None:
+        base = {
+            "llm": {
+                "provider": "ollama",
+                "model": "model",
+                "base_url": "http://localhost:11434",
+            },
+            "prompts": {
+                "on_success": "Success",
+                "on_failure": "Failure",
+                "on_no_llm": "Unavailable",
+            },
+        }
+
+        with pytest.raises(ValidationError):
+            GlobalConfig.model_validate({**base, "max_student_answer_length": 0})
+        with pytest.raises(ValidationError):
+            GlobalConfig.model_validate({**base, "max_unit_test_output_length": -1})
 
     def test_global_language_defaults_to_english(self, tmp_path: Path) -> None:
         content = textwrap.dedent("""\

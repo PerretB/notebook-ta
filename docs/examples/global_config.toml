@@ -1,4 +1,6 @@
 unit_test_timeout = 5.0
+max_student_answer_length = 10000
+max_unit_test_output_length = 4000
 language = "en"
 
 [llm]

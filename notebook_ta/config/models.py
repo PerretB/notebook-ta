@@ -144,6 +144,8 @@ class ExerciseConfig(_StrictConfigModel):
     prompt_on_success: str | None = None
     prompt_on_failure: str | None = None
     unit_test_timeout: float | None = Field(default=None, gt=0)
+    max_student_answer_length: int | None = Field(default=None, gt=0)
+    max_unit_test_output_length: int | None = Field(default=None, gt=0)
     tests: list[TestDefinition] = Field(default_factory=list)
 
 
@@ -153,6 +155,8 @@ class GlobalConfig(_StrictConfigModel):
     llm: LLMConfig
     prompts: PromptConfig
     unit_test_timeout: float = Field(default=5.0, gt=0)
+    max_student_answer_length: int = Field(default=10_000, gt=0)
+    max_unit_test_output_length: int = Field(default=4_000, gt=0)
     language: str = "en"
 
 
