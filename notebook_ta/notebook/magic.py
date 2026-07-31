@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-from collections.abc import Awaitable, Coroutine
-from typing import TYPE_CHECKING, Any, TypeVar, cast
+from collections.abc import Awaitable, Callable, Coroutine
+from typing import TYPE_CHECKING, Any, Literal, TypeVar, cast
 
 from IPython.core.magic import Magics, cell_magic, magics_class
 
@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from IPython.core.interactiveshell import InteractiveShell
 
     from notebook_ta.llm.base import LLMProvider
+    from notebook_ta.llm.postprocessing import AnswerPostprocessor
     from notebook_ta.testing.runner import TestResult
 
 _log = get_logger("magic")
@@ -38,12 +39,14 @@ class NotebookTAMagic(Magics):
         llm_provider: LLMProvider,
         session: SessionState,
         *,
+        answer_postprocessor: AnswerPostprocessor | None = None,
         debug: bool = False,
     ) -> None:
         super().__init__(shell)
         self._registry = registry
         self._llm = llm_provider
         self._session = session
+        self._answer_postprocessor = answer_postprocessor
         self._runner = TestRunner()
         self._debug = debug
         self._background_tasks: set[asyncio.Task[Any]] = set()
@@ -156,7 +159,14 @@ class NotebookTAMagic(Magics):
 
         async def _run() -> str | None:
             try:
-                return await stream_to_output(self._llm.stream(prompt))
+                return await self._stream_answer(
+                    exercise_id=exercise_id,
+                    call_type="analysis",
+                    prompt=prompt,
+                    student_code=student_code,
+                    test_results=results,
+                    hint_history=hint_history,
+                )
             except Exception as exc:
                 _log.warning("LLM stream failed for exercise %r: %s", exercise_id, exc)
                 display.display_no_llm_message(exercise._global.prompts.on_no_llm)
@@ -217,7 +227,14 @@ class NotebookTAMagic(Magics):
 
         async def _run() -> bool:
             try:
-                full_response = await stream_to_output(self._llm.stream(prompt))
+                full_response = await self._stream_answer(
+                    exercise_id=exercise_id,
+                    call_type="hint",
+                    prompt=prompt,
+                    student_code=student_code,
+                    test_results=test_results,
+                    hint_history=hint_history,
+                )
             except Exception as exc:
                 _log.warning("Hint stream failed for exercise %r: %s", exercise_id, exc)
                 display.display_no_llm_message(exercise._global.prompts.on_no_llm)
@@ -230,6 +247,53 @@ class NotebookTAMagic(Magics):
             return True
 
         return self._schedule_coroutine(_run())
+
+    async def _stream_answer(
+        self,
+        *,
+        exercise_id: str,
+        call_type: Literal["analysis", "hint"],
+        prompt: str,
+        student_code: str,
+        test_results: list[TestResult],
+        hint_history: list[HintExchange] | None,
+    ) -> str:
+        """Stream an answer, applying the configured hook to every accumulated update."""
+        stream_postprocessor: Callable[[str, bool], Awaitable[str]] | None = None
+        if self._answer_postprocessor is not None:
+            from notebook_ta.llm.postprocessing import LLMRequest, postprocess_answer
+
+            exercise = self._registry.get(exercise_id)
+            request = LLMRequest(
+                call_type=call_type,
+                exercise_id=exercise_id,
+                prompt=prompt,
+                student_code=student_code,
+                test_results=tuple(test_results),
+                hint_history=tuple(hint_history or ()),
+                provider=exercise._global.llm.provider,
+                model=exercise._global.llm.model,
+                temperature=exercise._global.llm.temperature,
+            )
+
+            async def _postprocess_update(answer: str, is_complete: bool) -> str:
+                """Apply the configured postprocessor to an accumulated answer update."""
+                assert self._answer_postprocessor is not None
+                return await postprocess_answer(
+                    self._answer_postprocessor,
+                    request,
+                    answer,
+                    is_complete,
+                )
+
+            stream_postprocessor = _postprocess_update
+
+        if stream_postprocessor is None:
+            return await stream_to_output(self._llm.stream(prompt))
+        return await stream_to_output(
+            self._llm.stream(prompt),
+            postprocessor=stream_postprocessor,
+        )
 
     def _reject_oversized_answer(self, exercise_id: str, student_code: str) -> bool:
         """Emit an error and reject LLM use when a student answer exceeds its limit."""
@@ -300,6 +364,7 @@ def load_ipython_extension(
     llm_provider: LLMProvider,
     session: SessionState,
     *,
+    answer_postprocessor: AnswerPostprocessor | None = None,
     debug: bool = False,
 ) -> None:
     """Register the %%notebook_ta cell magic on the active IPython instance."""
@@ -308,6 +373,7 @@ def load_ipython_extension(
         registry=registry,
         llm_provider=llm_provider,
         session=session,
+        answer_postprocessor=answer_postprocessor,
         debug=debug,
     )
     ip.register_magics(magic_instance)

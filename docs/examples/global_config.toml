@@ -62,3 +62,12 @@ Your code has been checked against the unit tests above.
 """
 
 hint_history_length = 3
+
+# Optional: transform each accumulated LLM answer update before display.
+# [answer_postprocessor]
+# code = '''
+# def postprocess(request, answer, is_complete):
+#     if is_complete:
+#         return answer.replace("[[internal-score]]", "")
+#     return answer
+# '''

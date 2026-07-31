@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable
 from types import SimpleNamespace
-from typing import cast
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 from IPython.core.interactiveshell import InteractiveShell
@@ -13,6 +13,7 @@ from IPython.core.interactiveshell import InteractiveShell
 from notebook_ta.config.models import ExerciseConfig, GlobalConfig, LLMConfig, PromptConfig
 from notebook_ta.exercise.definition import Exercise
 from notebook_ta.exercise.registry import ExerciseRegistry
+from notebook_ta.llm.postprocessing import AnswerPostprocessor, LLMRequest
 from notebook_ta.notebook.magic import NotebookTAMagic, load_ipython_extension
 from notebook_ta.notebook.session import SessionState
 from notebook_ta.testing.runner import TestResult
@@ -55,6 +56,7 @@ def make_magic(
     ip: MagicMock | None = None,
     exercises: list[Exercise] | None = None,
     llm_available: bool = True,
+    answer_postprocessor: AnswerPostprocessor | None = None,
 ) -> NotebookTAMagic:
     if ip is None:
         ip = make_ip_stub()
@@ -69,7 +71,13 @@ def make_magic(
     llm.stream = _stream
     session = SessionState(hint_history_length=3)
     # Pass None as shell to satisfy traitlets, then set the stub after construction
-    magic = NotebookTAMagic(shell=None, registry=registry, llm_provider=llm, session=session)
+    magic = NotebookTAMagic(
+        shell=None,
+        registry=registry,
+        llm_provider=llm,
+        session=session,
+        answer_postprocessor=answer_postprocessor,
+    )
     magic.shell = ip
     return magic
 
@@ -445,6 +453,78 @@ class TestHintHistory:
         assert len(history) == 2
         assert history[-1].hint_response == "hint3"
         assert history[0].hint_response == "hint2"
+
+
+class TestAnswerPostprocessor:
+    """Configured hooks should receive context and replace notebook answers."""
+
+    async def test_analysis_hook_receives_request_context(self) -> None:
+        captured: list[tuple[LLMRequest, str, bool]] = []
+
+        def hook(request: LLMRequest, answer: str, is_complete: bool) -> str:
+            captured.append((request, answer, is_complete))
+            return "processed final" if is_complete else "processed update"
+
+        magic = make_magic(answer_postprocessor=hook)
+        results = [TestResult("passes", True)]
+
+        async def render_with_postprocessor(
+            stream: object, *, postprocessor: object = None
+        ) -> str:
+            accumulated = ""
+            assert callable(postprocessor)
+            async for chunk in cast(Any, stream):
+                accumulated += chunk
+                await cast(Any, postprocessor)(accumulated, False)
+            return await cast(Any, postprocessor)(accumulated, True)
+
+        with patch(
+            "notebook_ta.notebook.magic.stream_to_output",
+            side_effect=render_with_postprocessor,
+        ):
+            task = magic._trigger_llm("ex1", "student code", results, None)
+            assert isinstance(task, Awaitable)
+            assert await task == "processed final"
+
+        assert [is_complete for _, _, is_complete in captured] == [False, True]
+        request, answer, _ = captured[-1]
+        assert answer == "Good feedback"
+        assert request.call_type == "analysis"
+        assert request.exercise_id == "ex1"
+        assert request.student_code == "student code"
+        assert request.test_results == tuple(results)
+        assert request.provider == "ollama"
+        assert request.model == "llama3.2:3b"
+
+    async def test_processed_hint_is_saved_to_history(self) -> None:
+        async def hook(
+            _request: LLMRequest, answer: str, _is_complete: bool
+        ) -> str:
+            return answer.upper()
+
+        magic = make_magic(answer_postprocessor=hook)
+        results = [TestResult("fails", False)]
+
+        async def render_with_postprocessor(
+            stream: object, *, postprocessor: object = None
+        ) -> str:
+            accumulated = ""
+            assert callable(postprocessor)
+            async for chunk in cast(Any, stream):
+                accumulated += chunk
+                await cast(Any, postprocessor)(accumulated, False)
+            return await cast(Any, postprocessor)(accumulated, True)
+
+        with patch(
+            "notebook_ta.notebook.magic.stream_to_output",
+            side_effect=render_with_postprocessor,
+        ):
+            task = magic._hint_callback("ex1", "student code", results)
+            assert isinstance(task, Awaitable)
+            assert await task is True
+
+        history = magic._session.get_history("ex1", 3)
+        assert history[0].hint_response == "GOOD FEEDBACK"
 
 
 # ---------------------------------------------------------------------------

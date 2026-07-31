@@ -9,6 +9,7 @@ Notebook_ta is a teaching assistant for Python notebooks powered by a LLM. The s
 - Each exercise also provides mandatory and optional information to the LLM to help it provide more accurate feedback. The mandatory information is composed of the exercise statements. Optional information can include the expected output, the expected time complexity, and other relevant details.
 - Each exercise can also provide unit tests to validate the student's code. If the tests succeed, the LLM should be triggered automatically to make a high level analysis of the proposed solution according to a specific prompt. If the tests fail, the system should propose to provide targeted feedback to help the student identify and correct their errors. The LLM can use these tests to provide more accurate feedback and hints. 
 - If no LLM is available, the system should not error, but instead provide a message to the student indicating that the LLM is not available and that they should check their code against the unit tests. The system should run the unit tests and display the results in a user-friendly format.
+- Instructors can configure a trusted Python hook, inline in the global TOML or as an importable function, to postprocess each accumulated analysis and hint update during streaming. The hook receives the request context, accumulated raw answer, and a completion flag; its final result is stored in hint history.
 
 ## Design
 
