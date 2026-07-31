@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from types import SimpleNamespace
 from collections.abc import AsyncIterator
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from IPython import display as ipydisplay
@@ -176,3 +176,37 @@ class TestStreamingIntegration:
         final_update = mock_handle.update.call_args.args[0]
         assert isinstance(final_update, ipydisplay.Markdown)
         assert "notebook-ta-spinner" not in final_update.data
+
+    @patch("IPython.display.display")
+    def test_stream_to_output_postprocesses_each_accumulated_update(
+        self, mock_ipydisplay: MagicMock
+    ) -> None:
+        """Postprocessing should preserve live updates and identify the final invocation."""
+        from notebook_ta.notebook.streaming import stream_to_output
+
+        mock_handle = MagicMock()
+        mock_ipydisplay.return_value = mock_handle
+
+        async def fake_stream() -> AsyncIterator[str]:
+            yield "visible "
+            yield "text [[structured]]"
+
+        completion_flags: list[bool] = []
+
+        async def postprocess(answer: str, is_complete: bool) -> str:
+            completion_flags.append(is_complete)
+            prefix = "final: " if is_complete else "live: "
+            return prefix + answer.replace("[[structured]]", "replacement")
+
+        result = asyncio.run(
+            stream_to_output(fake_stream(), postprocessor=postprocess)
+        )
+
+        assert result == "final: visible text replacement"
+        assert completion_flags == [False, False, True]
+        assert mock_handle.update.call_count == 3
+        updates = [entry.args[0] for entry in mock_handle.update.call_args_list]
+        assert all(isinstance(update, ipydisplay.Markdown) for update in updates)
+        assert "live: visible " in updates[0].data
+        assert "live: visible text replacement" in updates[1].data
+        assert "final: visible text replacement" in updates[2].data

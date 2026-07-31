@@ -12,7 +12,7 @@ deployment.
 Treat these inputs as trusted:
 
 - notebooks and every Python cell executed in them;
-- exercise TOML files, inline test code, and external test modules;
+- exercise TOML files, inline test and answer-postprocessor code, and external Python modules;
 - benchmark project JSON files, including saved solution and setup code;
 - local Python modules made importable through benchmark Python-path settings;
 - remote configuration URLs and the server that supplies their content.
@@ -49,6 +49,11 @@ Inline test source is resolved in the notebook process before its callable is se
 timeout-bounded child. Consequently, top-level statements in inline tests can execute in the
 kernel. Importing an external test module can likewise execute that module's top-level code in the
 kernel. The test callable itself runs in a child process with the kernel user's OS permissions.
+
+Inline answer-postprocessor code is executed in the notebook kernel while configuration is loaded.
+External postprocessors execute module top-level code when imported and run in the kernel as an
+LLM answer streams. These hooks are not sandboxed and have the kernel user's full permissions.
+This also applies when the global TOML was downloaded over HTTPS.
 
 ### Benchmark path
 

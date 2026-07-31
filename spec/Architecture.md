@@ -48,7 +48,8 @@ notebook_ta/
 │   ├── __init__.py
 │   ├── base.py               # Abstract LLMProvider + create_provider() factory
 │   ├── ollama.py             # OllamaProvider
-│   └── openai_compat.py      # OpenAICompatProvider
+│   ├── openai_compat.py      # OpenAICompatProvider
+│   └── postprocessing.py     # Configured complete-answer hook loading and execution
 ├── exercise/
 │   ├── __init__.py
 │   ├── definition.py         # Exercise class + build_prompt() logic
@@ -142,6 +143,16 @@ Describes a single LLM model option and its hardware requirements.
 | `student_code_safety_instruction` | `str` | Built-in safety instruction | Instruction placed immediately before student code |
 | `hint_history_length`| `int`  | `3`     | Max number of previous hint exchanges included in the LLM context         |
 
+#### `AnswerPostprocessorConfig`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `code` | `str \| None` | Inline code defining `postprocess(request, answer, is_complete)` |
+| `module` | `str \| None` | Dotted module containing an external hook |
+| `function` | `str \| None` | Callable name in the external module |
+
+Exactly one of `code` or (`module` + `function`) is required when this optional table is present.
+
 #### `TestDefinition`
 
 | Field      | Type          | Description                                               |
@@ -178,6 +189,7 @@ The two namespace export fields are mutually exclusive.
 |-----------|----------------|
 | `llm`     | `LLMConfig`    |
 | `prompts` | `PromptConfig` |
+| `answer_postprocessor` | `AnswerPostprocessorConfig \| None` |
 | `unit_test_timeout` | `float` |
 | `max_student_answer_length` | `int` |
 | `max_unit_test_output_length` | `int` |
@@ -195,6 +207,10 @@ model.
 
 The `[prompts]` section holds the default prompt strings for success, failure, hints, the no-LLM
 fallback message, and the student-code safety instruction. It also holds `hint_history_length`.
+
+The optional `[answer_postprocessor]` table defines trusted inline Python code or an external
+callable. Inline code must define `postprocess(request, answer, is_complete)`. The hook is resolved during
+`load()` so syntax, import, lookup, and signature errors fail configuration before notebook use.
 
 Top-level `max_student_answer_length` (default `10000`) prevents an oversized
 student submission from reaching the LLM after its code and tests have run.
@@ -440,8 +456,8 @@ On each "Give me hints" button click:
 2. Reserve the `NotebookTAMagic` busy guard and disable all registered hint buttons
 3. Retrieve `history = session.get_history(exercise_id, hint_history_length)`
 4. Build the prompt via `exercise.build_prompt(student_code, test_results, hint_history=history)`
-5. Stream the LLM response
-6. Append `HintExchange(student_code, full_response)` to history
+5. Stream the LLM response, postprocessing every accumulated update when a hook is configured
+6. Append `HintExchange(student_code, processed_response)` to history
 7. In a `finally` block, restore registered hint buttons to enabled `"Give me hints"` state
 
 The `on_failure` prompt is used for all hint requests. The LLM naturally escalates its guidance
@@ -468,12 +484,21 @@ All display functions use `IPython.display` and `ipywidgets`.
 
 ### 7.4 Streaming (`notebook/streaming.py`)
 
-`stream_to_output(async_gen: AsyncIterator[str]) -> str`
+`stream_to_output(async_gen: AsyncIterator[str], *, postprocessor=None) -> str`
 
 1. An `ipywidgets.Output` widget is displayed immediately as a placeholder
 2. An `asyncio` task accumulates incoming chunks; on each chunk, the `Output` widget is cleared and
    the accumulated text is re-rendered as `IPython.display.Markdown`
 3. The full accumulated response string is returned once the stream ends
+
+When an answer postprocessor is configured, `postprocessor` receives the accumulated raw answer
+after every chunk with `is_complete=False`; each result is rendered immediately. It is called once
+more after the stream with `is_complete=True`, and that result becomes the final displayed and
+stored answer. Asynchronous invocations are awaited in sequence and therefore apply backpressure
+to provider iteration. The hook also receives an immutable `LLMRequest` containing the call type,
+exercise ID, prompt, student code, tests, hint history, provider, model, and temperature. A hook
+exception or non-string result logs a warning and falls back to the accumulated raw answer for that
+update; later updates retry the hook.
 
 `nest_asyncio` is applied at `notebook_ta.load()` time to allow `asyncio` event loop nesting in
 Jupyter environments that do not natively support it.
@@ -572,12 +597,13 @@ def get_registry() -> ExerciseRegistry:
 
 1. Call `setup_logging(debug=debug)` to configure the logging hierarchy
 2. Load and validate both TOML files via `ConfigLoader`
-3. If `llm.model == "auto"`: run setup wizard, display result, update `LLMConfig.model`
-4. Create the LLM provider via `create_provider()`
-5. For a localhost Ollama provider, ensure the server and selected model are ready while displaying
+3. Resolve the optional answer postprocessor, including trusted inline-code execution or import
+4. If `llm.model == "auto"`: run setup wizard, display result, update `LLMConfig.model`
+5. Create the LLM provider via `create_provider()`
+6. For a localhost Ollama provider, ensure the server and selected model are ready while displaying
    live progress; setup failures degrade gracefully and leave the provider unavailable
-6. Populate the `ExerciseRegistry`
-7. Register `%%notebook_ta` magic via `load_ipython_extension()`
+7. Populate the `ExerciseRegistry`
+8. Register `%%notebook_ta` magic via `load_ipython_extension()`
 
 Calling `load()` a second time replaces the existing configuration and re-registers the magic.
 

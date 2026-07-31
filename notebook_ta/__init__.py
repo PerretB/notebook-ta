@@ -12,9 +12,10 @@ import nest_asyncio
 from notebook_ta.config.loader import load_exercises, load_global
 from notebook_ta.config.models import ConfigurationError, GlobalConfig, LLMConfig
 from notebook_ta.exercise.definition import Exercise
-from notebook_ta.i18n import set_language
 from notebook_ta.exercise.registry import ExerciseRegistry
+from notebook_ta.i18n import set_language
 from notebook_ta.llm.base import LLMProvider, create_provider
+from notebook_ta.llm.postprocessing import load_answer_postprocessor
 from notebook_ta.logging import get_logger, setup_logging
 from notebook_ta.notebook.extractor import detect_notebook_path, extract_statements
 from notebook_ta.notebook.magic import load_ipython_extension
@@ -75,6 +76,7 @@ def load(
     cfg = load_global(global_config)
     set_language(cfg.language)
     exercise_configs = load_exercises(exercises_config)
+    answer_postprocessor = load_answer_postprocessor(cfg.answer_postprocessor)
     initialization = _create_initialization_display()
 
     # 1b. Apply programmatic LLM overrides (validated through Pydantic)
@@ -124,10 +126,15 @@ def load(
     try:
         from IPython import get_ipython  # type: ignore[attr-defined]
 
-        ip = get_ipython()  # type: ignore[no-untyped-call]
+        ip = get_ipython()
         if ip is not None:
             load_ipython_extension(
-                ip, registry=registry, llm_provider=provider, session=session, debug=debug
+                ip,
+                registry=registry,
+                llm_provider=provider,
+                session=session,
+                answer_postprocessor=answer_postprocessor,
+                debug=debug,
             )
         else:
             import warnings
@@ -173,7 +180,7 @@ def _resolve_notebook_path() -> Path:
     try:
         from IPython import get_ipython as _gip  # type: ignore[attr-defined]
 
-        ip = _gip()  # type: ignore[no-untyped-call]
+        ip = _gip()
     except ImportError:
         ip = None
 

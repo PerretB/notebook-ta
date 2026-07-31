@@ -107,6 +107,36 @@ class PromptConfig(_StrictConfigModel):
     hint_history_length: int = Field(default=3, ge=0)
 
 
+class AnswerPostprocessorConfig(_StrictConfigModel):
+    """Reference to Python code that postprocesses accumulated LLM answer updates."""
+
+    code: str | None = None
+    module: NonEmptyString | None = None
+    function: NonEmptyString | None = None
+
+    @model_validator(mode="after")
+    def validate_source(self) -> AnswerPostprocessorConfig:
+        """Require either inline code or a complete external callable reference."""
+        has_inline = self.code is not None
+        has_external = self.module is not None or self.function is not None
+        if has_inline and has_external:
+            raise ValueError(
+                "AnswerPostprocessorConfig must specify either 'code' or "
+                "('module' + 'function'), not both."
+            )
+        if not has_inline and not has_external:
+            raise ValueError(
+                "AnswerPostprocessorConfig must specify either 'code' or "
+                "('module' + 'function')."
+            )
+        if has_external and (self.module is None or self.function is None):
+            raise ValueError(
+                "AnswerPostprocessorConfig with external source must specify both "
+                "'module' and 'function'."
+            )
+        return self
+
+
 class TestDefinition(_StrictConfigModel):
     """Defines a single unit test for an exercise."""
 
@@ -163,6 +193,7 @@ class GlobalConfig(_StrictConfigModel):
 
     llm: LLMConfig
     prompts: PromptConfig
+    answer_postprocessor: AnswerPostprocessorConfig | None = None
     unit_test_timeout: float = Field(default=5.0, gt=0)
     max_student_answer_length: int = Field(default=10_000, gt=0)
     max_unit_test_output_length: int = Field(default=4_000, gt=0)
