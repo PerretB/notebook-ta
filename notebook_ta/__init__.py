@@ -59,9 +59,9 @@ def load(
             from *global_config*. Valid keys mirror :class:`LLMConfig` fields
             (e.g. ``model``, ``base_url``, ``provider``, ``api_key_env``, ``timeout``).
             Literal API key values are not accepted.
-        debug: When ``True``, enable DEBUG-level logging to the terminal and
-               display the final LLM prompt in the notebook output as a
-               collapsible widget before each LLM call.  Defaults to ``False``.
+        debug: When ``True``, enable DEBUG-level logging, display the final LLM
+               prompt before each call, and show separated model thinking before
+               the final answer when the provider supplies it. Defaults to ``False``.
     """
     global _registry, _llm_provider, _global_config
 

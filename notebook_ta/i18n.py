@@ -14,6 +14,8 @@ _log = get_logger("i18n")
 _TRANSLATIONS: dict[str, dict[str, str]] = {
     "en": {
         "debug_prompt_title": "Debug - LLM Prompt ({call_type})",
+        "display_llm_thinking_prefix": "Thinking",
+        "display_llm_final_answer_prefix": "Final answer",
         "display_busy": (
             "**notebook-ta is already working.**\n\n"
             "Please wait for the current notebook-ta cell or hint request to finish, "
@@ -118,6 +120,8 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
     },
     "fr": {
         "debug_prompt_title": "Debogage - Invite LLM ({call_type})",
+        "display_llm_thinking_prefix": "Raisonnement",
+        "display_llm_final_answer_prefix": "Reponse finale",
         "display_busy": (
             "**notebook-ta est déjà en cours d'exécution:** Réessayez lorsque la requête en cours sera terminée."
         ),

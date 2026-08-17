@@ -484,12 +484,21 @@ All display functions use `IPython.display` and `ipywidgets`.
 
 ### 7.4 Streaming (`notebook/streaming.py`)
 
-`stream_to_output(async_gen: AsyncIterator[str], *, postprocessor=None) -> str`
+`stream_to_output(async_gen: AsyncIterator[str | LLMStreamChunk], *, postprocessor=None, show_thinking=False) -> str`
 
 1. An `ipywidgets.Output` widget is displayed immediately as a placeholder
 2. An `asyncio` task accumulates incoming chunks; on each chunk, the `Output` widget is cleared and
    the accumulated text is re-rendered as `IPython.display.Markdown`
 3. The full accumulated response string is returned once the stream ends
+
+`LLMStreamChunk` categorizes provider output as `thinking` or `answer`. In debug mode,
+categorized thinking is rendered before the answer in the same display, but is excluded from the
+returned string, answer postprocessing, benchmark output, and hint history. Providers that do not
+expose separate thinking content retain the answer-only behavior.
+
+For Ollama, the categorized debug stream checks the model's advertised capabilities with
+`AsyncClient.show()`. It passes `think=True` to `generate()` only when the `thinking` capability is
+present; the normal answer-only stream does not request thinking.
 
 When an answer postprocessor is configured, `postprocessor` receives the accumulated raw answer
 after every chunk with `is_complete=False`; each result is rendered immediately. It is called once
@@ -655,6 +664,8 @@ When `notebook_ta.load(..., debug=True)` is called:
    widget (title: *"🐛 Debug – LLM Prompt (analysis|hint)"*) via
    `display.display_debug_prompt(prompt, call_type)`. The accordion starts closed so routine
    notebook use is unaffected; instructors can expand it to inspect the exact prompt.
+3. When the provider emits separate thinking chunks, they are streamed before the labeled final
+   answer in the LLM answer box. Thinking remains display-only and is not saved or postprocessed.
 
 ### Logger Names Used
 

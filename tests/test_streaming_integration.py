@@ -210,3 +210,27 @@ class TestStreamingIntegration:
         assert "live: visible " in updates[0].data
         assert "live: visible text replacement" in updates[1].data
         assert "final: visible text replacement" in updates[2].data
+
+    @patch("IPython.display.display")
+    def test_stream_to_output_shows_thinking_before_answer_in_debug(
+        self, mock_ipydisplay: MagicMock
+    ) -> None:
+        """Debug rendering displays thinking but returns only the final answer."""
+        from notebook_ta.llm.base import LLMStreamChunk
+        from notebook_ta.notebook.streaming import stream_to_output
+
+        mock_handle = MagicMock()
+        mock_ipydisplay.return_value = mock_handle
+
+        async def fake_stream() -> AsyncIterator[LLMStreamChunk]:
+            yield LLMStreamChunk(kind="thinking", content="Check the tests.")
+            yield LLMStreamChunk(kind="answer", content="Fix the boundary.")
+
+        result = asyncio.run(stream_to_output(fake_stream(), show_thinking=True))
+
+        assert result == "Fix the boundary."
+        final_update = mock_handle.update.call_args.args[0]
+        assert "Thinking" in final_update.data
+        assert final_update.data.index("Check the tests.") < final_update.data.index(
+            "Fix the boundary."
+        )

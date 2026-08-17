@@ -11,6 +11,7 @@ from IPython.core.magic import Magics, cell_magic, magics_class
 
 from notebook_ta.exercise.registry import ExerciseNotFoundError, ExerciseRegistry
 from notebook_ta.i18n import translate
+from notebook_ta.llm.base import LLMProvider
 from notebook_ta.logging import get_logger
 from notebook_ta.notebook import display
 from notebook_ta.notebook.session import HintExchange, SessionState
@@ -20,7 +21,6 @@ from notebook_ta.testing.runner import TestRunner
 if TYPE_CHECKING:
     from IPython.core.interactiveshell import InteractiveShell
 
-    from notebook_ta.llm.base import LLMProvider
     from notebook_ta.llm.postprocessing import AnswerPostprocessor
     from notebook_ta.testing.runner import TestResult
 
@@ -288,11 +288,24 @@ class NotebookTAMagic(Magics):
 
             stream_postprocessor = _postprocess_update
 
+        response_stream = (
+            self._llm.stream_response(prompt)
+            if self._debug and isinstance(self._llm, LLMProvider)
+            else self._llm.stream(prompt)
+        )
         if stream_postprocessor is None:
-            return await stream_to_output(self._llm.stream(prompt))
+            if self._debug:
+                return await stream_to_output(response_stream, show_thinking=True)
+            return await stream_to_output(response_stream)
+        if not self._debug:
+            return await stream_to_output(
+                response_stream,
+                postprocessor=stream_postprocessor,
+            )
         return await stream_to_output(
-            self._llm.stream(prompt),
+            response_stream,
             postprocessor=stream_postprocessor,
+            show_thinking=True,
         )
 
     def _reject_oversized_answer(self, exercise_id: str, student_code: str) -> bool:
