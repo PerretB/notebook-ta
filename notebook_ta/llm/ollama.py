@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 
 import ollama
 
-from notebook_ta.llm.base import LLMProvider, TokenUsage
+from notebook_ta.llm.base import LLMProvider, LLMStreamChunk, TokenUsage
 from notebook_ta.logging import get_logger
 
 if TYPE_CHECKING:
@@ -129,17 +129,50 @@ class OllamaProvider(LLMProvider):
 
     async def stream(self, prompt: str) -> AsyncIterator[str]:
         """Yield response text chunks from the Ollama streaming API."""
+        async for chunk in self._stream_response(prompt, think=None):
+            if chunk.kind == "answer":
+                yield chunk.content
+
+    async def stream_response(self, prompt: str) -> AsyncIterator[LLMStreamChunk]:
+        """Yield thinking and final-answer chunks from the Ollama streaming API."""
+        client = ollama.AsyncClient(host=self._base_url, timeout=self._timeout)
+        think = True if await self._supports_thinking(client) else None
+        async for chunk in self._stream_response(prompt, think=think, client=client):
+            yield chunk
+
+    async def _supports_thinking(self, client: ollama.AsyncClient) -> bool:
+        """Return whether Ollama advertises thinking support for the configured model."""
+        try:
+            model = await client.show(self._model)
+        except Exception as exc:
+            _log.debug("Could not inspect capabilities for model %r: %s", self._model, exc)
+            return False
+        capabilities = getattr(model, "capabilities", None)
+        return isinstance(capabilities, list) and "thinking" in capabilities
+
+    async def _stream_response(
+        self,
+        prompt: str,
+        *,
+        think: bool | None,
+        client: ollama.AsyncClient | None = None,
+    ) -> AsyncIterator[LLMStreamChunk]:
+        """Yield categorized chunks from one Ollama generation request."""
         _log.debug("Ollama stream start: model=%r, prompt_len=%d", self._model, len(prompt))
         self._last_usage = None
-        client = ollama.AsyncClient(host=self._base_url, timeout=self._timeout)
+        client = client or ollama.AsyncClient(host=self._base_url, timeout=self._timeout)
         async for part in await client.generate(
             model=self._model,
             prompt=prompt,
             stream=True,
+            think=think,
             options={"temperature": self._temperature},
         ):
+            thinking = getattr(part, "thinking", None)
+            if isinstance(thinking, str) and thinking:
+                yield LLMStreamChunk(kind="thinking", content=thinking)
             if part.response:
-                yield part.response
+                yield LLMStreamChunk(kind="answer", content=part.response)
             if getattr(part, "done", False):
                 self._last_usage = TokenUsage(
                     prompt_tokens=getattr(part, "prompt_eval_count", None),

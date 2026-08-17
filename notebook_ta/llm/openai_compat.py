@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
-from notebook_ta.llm.base import LLMProvider, TokenUsage
+from notebook_ta.llm.base import LLMProvider, LLMStreamChunk, TokenUsage
 from notebook_ta.logging import get_logger
 
 if TYPE_CHECKING:
@@ -88,6 +88,12 @@ class OpenAICompatProvider(LLMProvider):
 
     async def stream(self, prompt: str) -> AsyncIterator[str]:
         """Yield response text chunks from the OpenAI-compatible streaming API."""
+        async for chunk in self.stream_response(prompt):
+            if chunk.kind == "answer":
+                yield chunk.content
+
+    async def stream_response(self, prompt: str) -> AsyncIterator[LLMStreamChunk]:
+        """Yield thinking and answer chunks exposed by OpenAI-compatible servers."""
         _log.debug("OpenAI-compat stream start: model=%r, prompt_len=%d", self._model, len(prompt))
         self._last_usage = None
         client = self._get_client()
@@ -100,9 +106,14 @@ class OpenAICompatProvider(LLMProvider):
         )
         async for chunk in stream:
             if chunk.choices:
-                delta = chunk.choices[0].delta.content
-                if delta:
-                    yield delta
+                delta = chunk.choices[0].delta
+                thinking = getattr(delta, "reasoning_content", None)
+                if not isinstance(thinking, str):
+                    thinking = getattr(delta, "reasoning", None)
+                if isinstance(thinking, str) and thinking:
+                    yield LLMStreamChunk(kind="thinking", content=thinking)
+                if delta.content:
+                    yield LLMStreamChunk(kind="answer", content=delta.content)
             usage = getattr(chunk, "usage", None)
             if usage is not None:
                 self._last_usage = TokenUsage(

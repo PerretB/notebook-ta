@@ -147,7 +147,9 @@ See the complete example files in [docs/examples](docs/examples).
 
 - Load both configuration files from local paths or `https://` URLs.
 - Override LLM settings at load time with `llm_overrides`.
-- Enable prompt inspection and DEBUG logging with `debug=True`.
+- Enable prompt inspection and DEBUG logging with `debug=True`. When a model/provider
+  exposes separate thinking content, it is enabled and shown before the final answer in the
+  answer box.
 - Use `notebook_ta.get_registry()` to inspect registered exercises.
 
 ```python

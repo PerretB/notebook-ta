@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from notebook_ta.logging import get_logger
 
@@ -23,6 +23,14 @@ class TokenUsage:
     completion_tokens: int | None
 
 
+@dataclass(frozen=True)
+class LLMStreamChunk:
+    """A categorized piece of a streaming LLM response."""
+
+    kind: Literal["thinking", "answer"]
+    content: str
+
+
 class LLMProvider(ABC):
     """Abstract base class for all LLM providers."""
 
@@ -35,6 +43,15 @@ class LLMProvider(ABC):
     def stream(self, prompt: str) -> AsyncIterator[str]:
         """Send a prompt and yield response chunks as they arrive."""
         ...
+
+    async def stream_response(self, prompt: str) -> AsyncIterator[LLMStreamChunk]:
+        """Yield categorized response chunks, defaulting to answer-only output.
+
+        Providers whose backend separates thinking from the final answer override this
+        method. The regular :meth:`stream` contract remains answer-only.
+        """
+        async for content in self.stream(prompt):
+            yield LLMStreamChunk(kind="answer", content=content)
 
     @abstractmethod
     def is_available(self) -> bool:

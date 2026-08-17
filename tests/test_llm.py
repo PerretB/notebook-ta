@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from notebook_ta.config.models import LLMConfig
-from notebook_ta.llm.base import create_provider
+from notebook_ta.llm.base import LLMStreamChunk, create_provider
 from notebook_ta.llm.ollama import OllamaProvider
 from notebook_ta.llm.openai_compat import OpenAICompatProvider
 
@@ -159,6 +159,34 @@ class TestOllamaProvider:
         assert chunks == ["Hello", " world"]
 
     @pytest.mark.asyncio
+    async def test_response_stream_separates_thinking_from_answer(self) -> None:
+        def make_part(response: str = "", thinking: str = "") -> MagicMock:
+            part = MagicMock()
+            part.response = response
+            part.thinking = thinking
+            part.done = False
+            return part
+
+        async def fake_stream() -> None:
+            for part in [make_part(thinking="Reasoning"), make_part(response="Answer")]:
+                yield part
+
+        with patch("notebook_ta.llm.ollama.ollama.AsyncClient") as mock_cls:
+            mock_client = mock_cls.return_value
+            model_info = MagicMock(capabilities=["completion", "thinking"])
+            mock_client.show = AsyncMock(return_value=model_info)
+            mock_client.generate = AsyncMock(return_value=fake_stream())
+            provider = OllamaProvider("http://localhost:11434", "deepseek-r1", 30)
+            chunks = [chunk async for chunk in provider.stream_response("prompt")]
+
+        assert chunks == [
+            LLMStreamChunk(kind="thinking", content="Reasoning"),
+            LLMStreamChunk(kind="answer", content="Answer"),
+        ]
+        mock_client.show.assert_awaited_once_with("deepseek-r1")
+        assert mock_client.generate.await_args.kwargs["think"] is True
+
+    @pytest.mark.asyncio
     async def test_query_returns_full_response(self) -> None:
         def make_part(text: str) -> MagicMock:
             p = MagicMock()
@@ -254,3 +282,31 @@ class TestOpenAICompatProvider:
         assert usage is not None
         assert usage.prompt_tokens == 12
         assert usage.completion_tokens == 7
+
+    @pytest.mark.asyncio
+    async def test_response_stream_reads_reasoning_content(self) -> None:
+        reasoning_chunk = MagicMock()
+        reasoning_chunk.choices = [MagicMock()]
+        reasoning_chunk.choices[0].delta.reasoning_content = "Reasoning"
+        reasoning_chunk.choices[0].delta.content = None
+        answer_chunk = MagicMock()
+        answer_chunk.choices = [MagicMock()]
+        answer_chunk.choices[0].delta.reasoning_content = None
+        answer_chunk.choices[0].delta.reasoning = None
+        answer_chunk.choices[0].delta.content = "Answer"
+
+        async def fake_stream() -> None:
+            yield reasoning_chunk
+            yield answer_chunk
+
+        provider = OpenAICompatProvider.from_config(make_openai_config())
+        with patch.object(provider, "_get_client") as mock_get_client:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=fake_stream())
+            mock_get_client.return_value = mock_client
+            chunks = [chunk async for chunk in provider.stream_response("prompt")]
+
+        assert chunks == [
+            LLMStreamChunk(kind="thinking", content="Reasoning"),
+            LLMStreamChunk(kind="answer", content="Answer"),
+        ]
