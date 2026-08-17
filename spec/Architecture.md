@@ -793,6 +793,8 @@ sequenceDiagram
 | `nbformat`    | Notebook `.ipynb` parsing for notebook source extraction          | Yes                  |
 | `nest_asyncio`| Allow `asyncio` event loop nesting in Jupyter environments       | Yes                  |
 | `psutil`      | RAM detection for the setup wizard                               | Optional             |
+| `nicegui`     | Instructor benchmarking UI (installed by the `bench` extra)      | No                   |
+| `tomlkit`     | Style-preserving benchmark catalog edits (`bench` extra)         | No                   |
 
 `tomllib` is part of the Python 3.11+ standard library and requires no extra installation.
 
