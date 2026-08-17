@@ -8,6 +8,13 @@ LLM/model combinations before rolling them out to students. It is documented in 
 
 ## Launching
 
+The benchmarking application is an optional instructor tool. Install its extra before launching
+it; the base `notebook-ta` install used by students does not include the NiceGUI stack.
+
+```bash
+pip install "notebook-ta[bench]"
+```
+
 ```bash
 notebook-ta bench                    # show the project welcome screen
 notebook-ta bench my_project.json    # offer this project on the welcome screen

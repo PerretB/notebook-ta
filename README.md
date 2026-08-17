@@ -254,7 +254,11 @@ notebook_ta.load(
 `notebook-ta` includes a local NiceGUI benchmarking app for instructors who want
 to compare prompts and models before using them in class.
 
-Launch it with:
+Install the optional benchmarking dependencies, then launch it:
+
+```bash
+pip install "notebook-ta[bench]"
+```
 
 ```bash
 notebook-ta bench

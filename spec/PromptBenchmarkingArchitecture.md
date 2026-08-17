@@ -695,13 +695,16 @@ The benchmarking application import remains lazy so CLI help can render without 
 ## 13. Dependencies (`pyproject.toml`)
 
 ```toml
-[project]
-dependencies = [
+[project.optional-dependencies]
+bench = [
     "nicegui>=1.4",
     "tomlkit>=0.13",
 ]
 ```
 
+The benchmark stack is installed with `pip install "notebook-ta[bench]"`, keeping NiceGUI and
+`tomlkit` out of the student client installation. The lightweight Click entry point remains a
+base dependency so it can show a friendly installation instruction when the extra is absent.
 `tomlkit` is used only for style-preserving edits to local exercise catalogs. Hashing uses
 `hashlib`/`json` (stdlib), and project persistence uses the existing `pydantic` dependency.
 
