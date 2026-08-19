@@ -215,11 +215,15 @@ One row per completed (or failed) job — the atomic unit shown in the Compare m
 | `input_snapshot` | `InputSnapshot` | |
 | `full_prompt` | `str` | Exact string sent to the LLM (from `Exercise.build_prompt()`). |
 | `test_results` | `list[TestResultModel]` | Serializable mirror of `testing.runner.TestResult`. |
+| `thinking_trace` | `str` | Provider-separated thinking content; empty when unavailable. |
 | `llm_output` | `str` | |
 | `metrics` | `ExecutionMetrics` | |
 | `status` | `Literal["completed", "failed"]` | |
 | `error` | `str \| None` | Populated when `status == "failed"`. |
 | `created_at` | `datetime` | |
+
+`thinking_trace` has an empty-string default, so schema-v2 project files created before thinking
+capture remain loadable without migration.
 
 ### `BenchProject` (root)
 
@@ -325,30 +329,37 @@ For each job, timing is measured independently of provider-reported usage (wall-
 across providers):
 
 ```python
-async def _run_one(provider: LLMProvider, prompt: str) -> tuple[str, ExecutionMetrics]:
+async def _run_one(
+    provider: LLMProvider, prompt: str
+) -> tuple[str, str, ExecutionMetrics]:
     start = time.monotonic()
-    first_token_time: float | None = None
-    chunks: list[str] = []
-    async for chunk in provider.stream(prompt):
-        if first_token_time is None:
-            first_token_time = time.monotonic()
-        chunks.append(chunk)
+    first_answer_token_time: float | None = None
+    answer_chunks: list[str] = []
+    thinking_chunks: list[str] = []
+    async for chunk in provider.stream_response(prompt):
+        if chunk.kind == "thinking":
+            thinking_chunks.append(chunk.content)
+            continue
+        if first_answer_token_time is None:
+            first_answer_token_time = time.monotonic()
+        answer_chunks.append(chunk.content)
     end = time.monotonic()
-    output = "".join(chunks)
+    output = "".join(answer_chunks)
+    thinking_trace = "".join(thinking_chunks)
 
     usage = provider.get_last_usage()
     if usage and usage.completion_tokens:
         completion_tokens = usage.completion_tokens
         approximate = False
     else:
-        completion_tokens = len(output.split())   # word-count fallback
+        completion_tokens = len(f"{thinking_trace} {output}".split())
         approximate = True
 
     total_time = end - start
-    ttft = (first_token_time - start) if first_token_time is not None else None
+    ttft = first_answer_token_time - start if first_answer_token_time is not None else None
     throughput = completion_tokens / total_time if total_time > 0 else None
 
-    return output, ExecutionMetrics(
+    return output, thinking_trace, ExecutionMetrics(
         time_to_first_token_s=ttft,
         total_generation_time_s=total_time,
         throughput_tokens_per_s=throughput,
@@ -358,6 +369,11 @@ async def _run_one(provider: LLMProvider, prompt: str) -> tuple[str, ExecutionMe
         ),
     )
 ```
+
+Thinking traces are stored separately from `llm_output`. TTFT deliberately measures the first
+final-answer token, because that is the user-visible latency; thinking chunks received before the
+answer do not stop the TTFT clock. Provider-reported completion usage and the fallback generation
+count cover both thinking and answer output.
 
 ---
 

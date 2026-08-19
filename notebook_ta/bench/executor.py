@@ -345,7 +345,7 @@ class BenchExecutor:
             prompt = exercise.build_prompt(job.solution.code, test_results, hint_history=None)
 
             provider = self._get_provider(job.model)
-            output, metrics = await self._run_llm(provider, prompt)
+            output, thinking_trace, metrics = await self._run_llm(provider, prompt)
 
             record = ExecutionRecord(
                 run_id=run.id,
@@ -359,6 +359,7 @@ class BenchExecutor:
                     TestResultModel(name=r.name, passed=r.passed, message=r.message)
                     for r in test_results
                 ],
+                thinking_trace=thinking_trace,
                 llm_output=output,
                 metrics=metrics,
                 status="completed",
@@ -385,17 +386,24 @@ class BenchExecutor:
             on_progress(job, "failed", str(exc), record)
 
     @staticmethod
-    async def _run_llm(provider: LLMProvider, prompt: str) -> tuple[str, ExecutionMetrics]:
-        """Stream `prompt` through `provider`, timing TTFT/total time and capturing token usage."""
+    async def _run_llm(
+        provider: LLMProvider, prompt: str
+    ) -> tuple[str, str, ExecutionMetrics]:
+        """Stream an answer and thinking trace while capturing generation metrics."""
         start = time.monotonic()
-        first_token_time: float | None = None
-        chunks: list[str] = []
-        async for chunk in provider.stream(prompt):
-            if first_token_time is None:
-                first_token_time = time.monotonic()
-            chunks.append(chunk)
+        first_answer_token_time: float | None = None
+        answer_chunks: list[str] = []
+        thinking_chunks: list[str] = []
+        async for chunk in provider.stream_response(prompt):
+            if chunk.kind == "thinking":
+                thinking_chunks.append(chunk.content)
+                continue
+            if first_answer_token_time is None:
+                first_answer_token_time = time.monotonic()
+            answer_chunks.append(chunk.content)
         end = time.monotonic()
-        output = "".join(chunks)
+        output = "".join(answer_chunks)
+        thinking_trace = "".join(thinking_chunks)
 
         usage = provider.get_last_usage()
         if usage and usage.completion_tokens:
@@ -403,15 +411,19 @@ class BenchExecutor:
             prompt_tokens = usage.prompt_tokens
             approximate = False
         else:
-            completion_tokens = len(output.split())
+            completion_tokens = len(f"{thinking_trace} {output}".split())
             prompt_tokens = usage.prompt_tokens if usage else None
             approximate = True
 
         total_time = end - start
-        ttft = (first_token_time - start) if first_token_time is not None else None
+        ttft = (
+            first_answer_token_time - start
+            if first_answer_token_time is not None
+            else None
+        )
         throughput = (completion_tokens / total_time) if total_time > 0 else None
 
-        return output, ExecutionMetrics(
+        return output, thinking_trace, ExecutionMetrics(
             time_to_first_token_s=ttft,
             total_generation_time_s=total_time,
             throughput_tokens_per_s=throughput,

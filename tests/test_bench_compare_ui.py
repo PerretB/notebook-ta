@@ -20,6 +20,7 @@ from notebook_ta.bench.storage import ProjectStore
 from notebook_ta.bench.ui.compare_tab import (
     _default_combinations,
     _open_delete_run_dialog,
+    _open_details_dialog,
     build,
 )
 from notebook_ta.config.models import ExerciseConfig
@@ -174,3 +175,22 @@ async def test_run_deletion_requires_irreversible_action_confirmation(user: User
     user.find("Delete permanently").click()
     assert all(candidate.id != run.id for candidate in state.project.runs)
     assert all(record.run_id != run.id for record in state.project.execution_records)
+
+
+@pytest.mark.asyncio
+@pytest.mark.nicegui_main_file("notebook_ta/bench/app.py")
+async def test_result_details_show_recorded_thinking_trace(user: User) -> None:
+    """The detailed result dialog must expose the persisted thinking trace."""
+    record = _make_state_with_history().project.execution_records[0]
+    record.thinking_trace = "Inspect the failing boundary before answering."
+
+    @ui.page("/")
+    def page() -> None:
+        """Render a control that opens the result details dialog under test."""
+        ui.button("Open result", on_click=lambda: _open_details_dialog(record))
+
+    await user.open("/")
+    user.find("Open result").click()
+
+    await user.should_see("Thinking Trace")
+    await user.should_see("Inspect the failing boundary before answering.")

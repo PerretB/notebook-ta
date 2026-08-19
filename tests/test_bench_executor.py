@@ -16,7 +16,7 @@ from notebook_ta.bench.models import (
     StudentSolution,
 )
 from notebook_ta.config.models import ExerciseConfig, LLMConfig, TestDefinition
-from notebook_ta.llm.base import LLMProvider, TokenUsage
+from notebook_ta.llm.base import LLMProvider, LLMStreamChunk, TokenUsage
 
 
 class FakeProvider(LLMProvider):
@@ -50,6 +50,17 @@ class FakeProvider(LLMProvider):
 
     def get_last_usage(self) -> TokenUsage | None:
         return self._usage
+
+
+class FakeThinkingProvider(FakeProvider):
+    """A fake provider that separates thinking from final-answer chunks."""
+
+    async def stream_response(self, prompt: str):
+        """Yield one thinking chunk followed by two final-answer chunks."""
+        self.call_count += 1
+        yield LLMStreamChunk(kind="thinking", content="consider carefully")
+        yield LLMStreamChunk(kind="answer", content="final ")
+        yield LLMStreamChunk(kind="answer", content="answer")
 
 
 def make_exercise(
@@ -112,6 +123,24 @@ class TestBuildJobs:
 
 
 class TestBenchExecutorSequential:
+    @pytest.mark.asyncio
+    async def test_thinking_is_recorded_and_ttft_uses_first_answer_token(self) -> None:
+        provider = FakeThinkingProvider([])
+
+        with patch(
+            "notebook_ta.bench.executor.time.monotonic",
+            side_effect=[10.0, 13.0, 20.0],
+        ):
+            output, thinking_trace, metrics = await BenchExecutor._run_llm(
+                provider, "prompt"
+            )
+
+        assert output == "final answer"
+        assert thinking_trace == "consider carefully"
+        assert metrics.time_to_first_token_s == 3.0
+        assert metrics.total_generation_time_s == 10.0
+        assert metrics.token_usage.completion_tokens == 4
+
     @pytest.mark.asyncio
     async def test_unit_test_output_is_truncated_before_benchmark_prompt(self) -> None:
         config = make_exercise(
