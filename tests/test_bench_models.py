@@ -152,6 +152,26 @@ class TestBenchProjectSerialization:
         assert restored.models_under_test[0].label == "llama3.2:3b (ollama)"
         assert restored.schema_version == project.schema_version
 
+    def test_execution_record_thinking_trace_round_trips_json(self) -> None:
+        """Thinking traces persist while older records default to an empty trace."""
+        record = ExecutionRecord(
+            run_id="run1",
+            exercise_id="ex1",
+            solution_id="sol1",
+            model_label="m1",
+            prompt_version_id="V1",
+            input_snapshot=make_snapshot(),
+            thinking_trace="reasoning",
+        )
+        project = BenchProject(settings=make_settings(), execution_records=[record])
+
+        restored = BenchProject.model_validate_json(project.model_dump_json())
+
+        assert restored.execution_records[0].thinking_trace == "reasoning"
+        record_data = record.model_dump()
+        del record_data["thinking_trace"]
+        assert ExecutionRecord.model_validate(record_data).thinking_trace == ""
+
     def test_project_setup_code_round_trips_json(self) -> None:
         project = BenchProject(settings=make_settings())
         project.setup_code_by_exercise["ex1"] = "expected = 5"

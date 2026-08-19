@@ -440,6 +440,12 @@ def _open_details_dialog(record: ExecutionRecord) -> None:
         else:
             ui.label("No unit test results recorded.").classes("text-caption")
 
+        ui.label("Thinking Trace").classes("font-bold")
+        if record.thinking_trace:
+            ui.code(record.thinking_trace).classes("w-full max-h-80 overflow-auto")
+        else:
+            ui.label("No thinking trace recorded.").classes("text-caption")
+
         ui.label("Performance Metrics").classes("font-bold")
         with ui.row().classes("gap-3"):
             ttft = record.metrics.time_to_first_token_s

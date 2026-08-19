@@ -154,6 +154,7 @@ class ExecutionRecord(BaseModel):
     input_snapshot: InputSnapshot
     full_prompt: str = ""
     test_results: list[TestResultModel] = []
+    thinking_trace: str = ""
     llm_output: str = ""
     metrics: ExecutionMetrics = Field(default_factory=ExecutionMetrics)
     status: Literal["completed", "failed"] = "completed"

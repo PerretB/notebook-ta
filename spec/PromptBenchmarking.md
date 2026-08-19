@@ -117,6 +117,7 @@ A matrix view allows the user to compare the LLM outputs for a specific exercise
 - The cells in the comparison matrix are interactive. Clicking on a cell opens a detailed view that includes:
   - The exact full prompt sent to the LLM for that run.
   - The unit test results for the student solution.
+  - The model's thinking trace when the provider exposes separate thinking content.
   - Performance metrics such as time-to-first-token, total generation time, and throughput.
   - Any associated error messages or warnings.
 
@@ -124,14 +125,18 @@ A matrix view allows the user to compare the LLM outputs for a specific exercise
 9. Performance Metrics to Capture
 For every individual generation, the backend must capture and save the following non-functional metrics:
 
-Time to First Token (TTFT): The duration (in seconds) between sending the payload and receiving the very first chunk of text from the local LLM stream.
+Time to First Token (TTFT): The duration (in seconds) between sending the payload and receiving the
+first final-answer token from the local LLM stream. Thinking tokens do not stop the TTFT clock.
 
 Total Generation Time: The overall time taken to complete the response text.
 
 Throughput (Generation Speed): Measured in tokens per second (or words per second) to evaluate if the model runs efficiently on the user's local hardware.
 
 10. Project Persistence
-Full-State Serialization: Saving the project exports a single file containing the file path of the source TOML catalog, all user-added student responses, the chronological library of system prompts, and the complete execution history (including outputs, metrics, and input-snapshots).
+Full-State Serialization: Saving the project exports a single file containing the file path of the
+source TOML catalog, all user-added student responses, the chronological library of system prompts,
+and the complete execution history (including thinking traces, outputs, metrics, and
+input-snapshots).
 
 Credentials are never stored in the project file. Model settings persist only the name of an
 environment variable containing an API key; its value is resolved in memory when the provider is
