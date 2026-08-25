@@ -78,6 +78,21 @@ class NotebookTAMagic(Magics):
 
         finish_deferred = False
         try:
+            if exercise.answer_type == "free_text":
+                if not cell.strip():
+                    _log.error(
+                        translate("magic_student_answer_empty", language=exercise.language)
+                    )
+                    return
+                response = self._trigger_llm(
+                    exercise_id,
+                    cell,
+                    results=None,
+                    hint_history=None,
+                )
+                finish_deferred = self._finish_operation_after(response)
+                return
+
             # 2. Execute the student's code in the user namespace.
             execution_result = cast(Any, self.shell.run_cell)(cell)
             execution_error = (
@@ -129,7 +144,7 @@ class NotebookTAMagic(Magics):
         self,
         exercise_id: str,
         student_code: str,
-        results: list[TestResult],
+        results: list[TestResult] | None,
         hint_history: list[HintExchange] | None,
     ) -> Awaitable[str | None] | str | None:
         """Build a prompt and schedule LLM response streaming."""
@@ -255,7 +270,7 @@ class NotebookTAMagic(Magics):
         call_type: Literal["analysis", "hint"],
         prompt: str,
         student_code: str,
-        test_results: list[TestResult],
+        test_results: list[TestResult] | None,
         hint_history: list[HintExchange] | None,
     ) -> str:
         """Stream an answer, applying the configured hook to every accumulated update."""
@@ -269,11 +284,12 @@ class NotebookTAMagic(Magics):
                 exercise_id=exercise_id,
                 prompt=prompt,
                 student_code=student_code,
-                test_results=tuple(test_results),
+                test_results=tuple(test_results or ()),
                 hint_history=tuple(hint_history or ()),
                 provider=exercise._global.llm.provider,
                 model=exercise._global.llm.model,
                 temperature=exercise._global.llm.temperature,
+                answer_type=exercise.answer_type,
             )
 
             async def _postprocess_update(answer: str, is_complete: bool) -> str:
@@ -316,7 +332,11 @@ class NotebookTAMagic(Magics):
             return False
         _log.error(
             translate(
-                "magic_student_answer_too_long",
+                (
+                    "magic_free_text_answer_too_long"
+                    if exercise.answer_type == "free_text"
+                    else "magic_student_answer_too_long"
+                ),
                 {
                     "answer_length": answer_length,
                     "max_length": exercise.max_student_answer_length,

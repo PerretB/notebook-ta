@@ -21,6 +21,36 @@ does not break saved solutions or historical benchmark records.
 
 `statement` is optional — see [Embedding statements in the notebook](#embedding-statements-in-the-notebook) for an alternative that avoids duplicating the exercise description.
 
+## Free-text exercises
+
+Use `answer_type = "free_text"` when the cell body is an explanation, proof, reflection, or other
+prose answer rather than Python:
+
+```toml
+[exercises.explain_recursion]
+answer_type = "free_text"
+statement = "Explain recursion and the purpose of a base case."
+evaluation_criteria = "A satisfactory answer explains self-invocation and termination."
+prompt_on_free_text = "Evaluate the answer and identify one concrete improvement."
+```
+
+The student still submits through the same cell magic:
+
+```text
+%%notebook_ta explain_recursion
+Recursion occurs when a function calls itself. A base case stops the calls...
+```
+
+Notebook-ta treats that cell body as opaque text: it does not execute it, modify the notebook
+namespace, or run unit tests. A non-empty answer within `max_student_answer_length` is sent directly
+to the LLM for formative evaluation. No “Tests passed” indicator or hint button is displayed.
+
+A free-text exercise must configure `prompt_on_free_text` or use global `prompts.on_free_text`.
+`evaluation_criteria` is optional but strongly recommended for consistent feedback. Tests and
+test-specific per-exercise limits are invalid for this answer type. LLM evaluation is
+non-deterministic and should not be treated as authoritative grading without human review and an
+appropriate audit process.
+
 ---
 
 ## Writing Unit Tests

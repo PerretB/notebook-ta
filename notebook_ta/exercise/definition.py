@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from notebook_ta.config.models import (
     ConfigurationError,
@@ -27,7 +27,11 @@ class Exercise:
     def _validate_prompt_overrides(self) -> None:
         """Fail early when an exercise prompt override cannot be expanded."""
         prompt_config = self._global.prompts
-        for field_name in ("prompt_on_success", "prompt_on_failure"):
+        for field_name in (
+            "prompt_on_success",
+            "prompt_on_failure",
+            "prompt_on_free_text",
+        ):
             template = getattr(self._config, field_name)
             if template is None:
                 continue
@@ -40,6 +44,15 @@ class Exercise:
                 raise ConfigurationError(
                     f"Invalid prompt configuration for exercise {self.id!r}: {exc}"
                 ) from exc
+        if (
+            self._config.answer_type == "free_text"
+            and self._config.prompt_on_free_text is None
+            and self._global.prompts.on_free_text is None
+        ):
+            raise ConfigurationError(
+                f"Exercise {self.id!r} uses answer_type='free_text' but neither "
+                "prompt_on_free_text nor prompts.on_free_text is configured."
+            )
 
     @property
     def id(self) -> str:
@@ -64,6 +77,11 @@ class Exercise:
     def tests(self) -> list[TestDefinition]:
         """Return the unit test definitions configured for this exercise."""
         return self._config.tests
+
+    @property
+    def answer_type(self) -> Literal["python", "free_text"]:
+        """Return whether the exercise accepts Python or free-text answers."""
+        return self._config.answer_type
 
     @property
     def config(self) -> ExerciseConfig:
@@ -118,9 +136,25 @@ class Exercise:
         """
         prompt_config = self._global.prompts
 
+        if self.answer_type == "free_text" and test_results is not None:
+            raise ValueError("free-text prompts cannot include unit test results")
+        if self.answer_type == "free_text" and hint_history:
+            raise ValueError("free-text prompts cannot include hint history")
+
         # 1. Active prompt
         parts: list[str] = []
-        if test_results is None or all(r.passed for r in test_results):
+        if self.answer_type == "free_text":
+            template = self._config.prompt_on_free_text
+            active_prompt = (
+                prompt_config.expand_template(
+                    template,
+                    location=f"exercises.{self.id}.prompt_on_free_text",
+                )
+                if template is not None
+                else prompt_config.on_free_text
+            )
+            assert active_prompt is not None
+        elif test_results is None or all(r.passed for r in test_results):
             template = self._config.prompt_on_success
             active_prompt = (
                 prompt_config.expand_template(
@@ -156,10 +190,20 @@ class Exercise:
         if self._config.additional_info:
             parts.append(f"\n**Additional Information:**\n{self._config.additional_info}\n")
 
-        # 3. Student code safety instruction and code block
-        parts.append("\n## Student Code\n\n")
-        parts.append(prompt_config.student_code_safety_instruction)
-        parts.append(f"\n\n```python\n{student_code}\n```\n")
+        if self.answer_type == "free_text":
+            if self._config.evaluation_criteria:
+                parts.append(
+                    "\n## Evaluation Criteria\n\n"
+                    f"{self._config.evaluation_criteria}\n"
+                )
+            parts.append("\n## Student Answer\n\n")
+            parts.append(prompt_config.student_text_safety_instruction)
+            parts.append(f"\n\n{student_code}\n")
+        else:
+            # 3. Student code safety instruction and code block
+            parts.append("\n## Student Code\n\n")
+            parts.append(prompt_config.student_code_safety_instruction)
+            parts.append(f"\n\n```python\n{student_code}\n```\n")
 
         # 4. Test results block (only when tests failed)
         if test_results and not all(r.passed for r in test_results):

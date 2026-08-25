@@ -13,6 +13,7 @@ from notebook_ta.config.loader import load_exercises, load_global
 from notebook_ta.config.models import (
     DEFAULT_STUDENT_CODE_SAFETY_INSTRUCTION,
     ConfigurationError,
+    ExerciseConfig,
     GlobalConfig,
     LLMConfig,
     TestDefinition,
@@ -331,6 +332,38 @@ class TestLoadExercises:
         ex2 = next(e for e in exercises if e.id == "ex2")
         assert ex2.tests[0].module == "some.module"
         assert ex2.tests[0].function == "test_multiply"
+
+    def test_free_text_exercise_loads(self, tmp_path: Path) -> None:
+        content = textwrap.dedent("""\
+            [exercises.explain]
+            answer_type = "free_text"
+            statement = "Explain recursion."
+            evaluation_criteria = "Mention a base case."
+            prompt_on_free_text = "Evaluate the explanation."
+        """)
+        path = tmp_path / "free_text.toml"
+        path.write_text(content, encoding="utf-8")
+
+        exercise = load_exercises(path)[0]
+
+        assert exercise.answer_type == "free_text"
+        assert exercise.evaluation_criteria == "Mention a base case."
+
+    @pytest.mark.parametrize(
+        "invalid_setting",
+        [
+            {"tests": [{"name": "test", "code": "def test(): return True"}]},
+            {"unit_test_timeout": 1.0},
+            {"max_unit_test_output_length": 100},
+        ],
+    )
+    def test_free_text_exercise_rejects_unit_test_settings(
+        self, invalid_setting: dict[str, object]
+    ) -> None:
+        with pytest.raises(ValidationError, match="free-text exercises cannot define"):
+            ExerciseConfig.model_validate(
+                {"id": "explain", "answer_type": "free_text", **invalid_setting}
+            )
 
     def test_missing_file_raises(self, tmp_path: Path) -> None:
         with pytest.raises(ConfigurationError, match="not found"):
