@@ -14,27 +14,63 @@ $PyprojectFile = Join-Path $ProjectRoot "pyproject.toml"
 $FingerprintFile = Join-Path $VenvDirectory ".pyproject.sha256"
 
 function New-ProjectVirtualEnvironment {
+    $PyLauncher = Get-Command "py" -ErrorAction SilentlyContinue
+    $PythonExecutable = $null
+    $PythonArguments = @()
+
+    if ($null -ne $PyLauncher) {
+        $LauncherIsUsable = $false
+
+        try {
+            & $PyLauncher.Source -3.11 -c "import sys" *> $null
+            $LauncherIsUsable = $LASTEXITCODE -eq 0
+        }
+        catch {
+            $LauncherIsUsable = $false
+        }
+
+        if ($LauncherIsUsable) {
+            $PythonExecutable = $PyLauncher.Source
+            $PythonArguments = @("-3.11")
+        }
+    }
+
+    if ($null -eq $PythonExecutable) {
+        $SystemPython = Get-Command "python" -ErrorAction SilentlyContinue
+
+        if ($null -ne $SystemPython) {
+            $SystemPythonIsUsable = $false
+
+            try {
+                & $SystemPython.Source -c (
+                    "import sys; raise SystemExit(sys.version_info < (3, 11))"
+                ) *> $null
+                $SystemPythonIsUsable = $LASTEXITCODE -eq 0
+            }
+            catch {
+                $SystemPythonIsUsable = $false
+            }
+
+            if ($SystemPythonIsUsable) {
+                $PythonExecutable = $SystemPython.Source
+            }
+        }
+    }
+
+    if ($null -eq $PythonExecutable) {
+        throw (
+            "Python 3.11 or newer is unavailable. The existing environment " +
+            "was preserved. Install Python 3.11+ or create " +
+            "'$VenvDirectory' manually."
+        )
+    }
+
     if (Test-Path -LiteralPath $VenvDirectory) {
         Remove-Item -LiteralPath $VenvDirectory -Recurse -Force
     }
 
-    $PyLauncher = Get-Command "py" -ErrorAction SilentlyContinue
-
-    if ($null -ne $PyLauncher) {
-        & $PyLauncher.Source -3.11 -m venv $VenvDirectory
-    }
-    else {
-        $SystemPython = Get-Command "python" -ErrorAction SilentlyContinue
-
-        if ($null -eq $SystemPython) {
-            throw (
-                "Python 3.11 is unavailable. Install Python 3.11 or create " +
-                "'$VenvDirectory' manually."
-            )
-        }
-
-        & $SystemPython.Source -m venv $VenvDirectory
-    }
+    $VenvArguments = $PythonArguments + @("-m", "venv", $VenvDirectory)
+    & $PythonExecutable @VenvArguments
 
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $VenvPython)) {
         throw "Failed to create the virtual environment at '$VenvDirectory'."
