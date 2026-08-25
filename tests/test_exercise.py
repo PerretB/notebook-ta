@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import pytest
+
 from notebook_ta.config.models import (
     DEFAULT_STUDENT_CODE_SAFETY_INSTRUCTION,
+    ConfigurationError,
     ExerciseConfig,
     GlobalConfig,
     LLMConfig,
@@ -102,6 +105,33 @@ class TestPromptContextSelection:
         ex = make_exercise()
         prompt = ex.build_prompt("code", test_results=None)
         assert "Global success prompt." in prompt
+
+    def test_exercise_override_reuses_global_fragment(self) -> None:
+        global_config = make_global_config(
+            fragments={"prompt_base": "You are a programming tutor."}
+        )
+        ex = make_exercise(
+            global_config=global_config,
+            prompt_on_success="{{ prompt_base }}\nThe solution passed.",
+        )
+
+        prompt = ex.build_prompt("code", [TestResult("t", True)])
+
+        assert "You are a programming tutor.\nThe solution passed." in prompt
+
+    def test_exercise_override_can_escape_literal_double_braces(self) -> None:
+        ex = make_exercise(prompt_on_success="Example: {{{{ value }}}}")
+
+        prompt = ex.build_prompt("code", [TestResult("t", True)])
+
+        assert "Example: {{ value }}" in prompt
+
+    def test_unknown_fragment_in_exercise_override_fails_during_construction(self) -> None:
+        with pytest.raises(
+            ConfigurationError,
+            match="exercises.ex1.prompt_on_failure.*unknown prompt fragment 'missing'",
+        ):
+            make_exercise(prompt_on_failure="{{ missing }}")
 
 
 # ---------------------------------------------------------------------------

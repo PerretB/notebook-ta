@@ -87,6 +87,9 @@ def load(
             raise ConfigurationError(f"Invalid LLM override: {exc}") from exc
         cfg = cfg.model_copy(update={"llm": updated_llm})
 
+    # Validate exercise prompt references before provider setup or notebook registration.
+    exercises = [Exercise(config=ex_cfg, global_config=cfg) for ex_cfg in exercise_configs]
+
     # 2. Auto-setup wizard
     if cfg.llm.model == "auto":
         _run_setup_wizard(cfg, initialization)
@@ -116,8 +119,8 @@ def load(
 
     # 5. Build and populate the registry
     registry = ExerciseRegistry()
-    for ex_cfg in exercise_configs:
-        registry.register(Exercise(config=ex_cfg, global_config=cfg))
+    for exercise in exercises:
+        registry.register(exercise)
 
     session = SessionState(hint_history_length=cfg.prompts.hint_history_length)
     _log.debug("Registry populated: %d exercise(s)", len(exercise_configs))

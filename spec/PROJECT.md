@@ -5,7 +5,7 @@ Notebook_ta is a teaching assistant for Python notebooks powered by a LLM. The s
 
 ## Key Features
 
-- The LLM analyzes the student's code and provides feedback following the instructions given in one or more general prompt which can be defined at the global level or at the exercise level. 
+- The LLM analyzes the student's code and provides feedback following the instructions given in one or more general prompt which can be defined at the global level or at the exercise level. Global prompt fragments are reusable from success, failure, safety, no-LLM, and exercise-level prompt templates through validated `{{ fragment_name }}` references.
 - Each exercise also provides mandatory and optional information to the LLM to help it provide more accurate feedback. The mandatory information is composed of the exercise statements. Optional information can include the expected output, the expected time complexity, and other relevant details.
 - Each exercise can also provide unit tests to validate the student's code. If the tests succeed, the LLM should be triggered automatically to make a high level analysis of the proposed solution according to a specific prompt. If the tests fail, the system should propose to provide targeted feedback to help the student identify and correct their errors. The LLM can use these tests to provide more accurate feedback and hints. 
 - If no LLM is available, the system should not error, but instead provide a message to the student indicating that the LLM is not available and that they should check their code against the unit tests. The system should run the unit tests and display the results in a user-friendly format.
@@ -17,7 +17,7 @@ The system is designed to be modular and extensible. The main components are:
 
 - **Configuration**: This component manages the configuration of the system and exercise data. It should be possible to read the configuration from a TOML file (local or remote) and to override it programmatically. The configuration files defines: 
   - Default LLM provider and API settings (local or cloud-based)
-  - Default prompts and other settings that can be used by the LLM. 
+  - Default prompts, recursively composable prompt fragments, and other settings that can be used by the LLM. Fragment expansion is deterministic textual substitution: unknown or malformed references and dependency cycles fail configuration loading, and no expressions or runtime values are evaluated.
   - Exercise definitions, including the exercise statement, optional information, and unit tests. The configuration should be designed to support different types of exercises and allow for easy addition of new exercises.
 - **LLM Connection**: This component handles the communication with the LLM. It sends the student's code and receives feedback, hints, and suggestions. It should be designed to support different LLM providers and APIs (local or cloud-based). At first, we will use local Ollama LLM, but the system should be able to switch to other providers if needed.
 - **Exercise Definition**: This component defines the structure of an exercise, including the exercise statement, optional information, and unit tests. This componenent should be able to construct a LLM prompt based on the exercise definition and the student's code. It should also be able to validate the student's code against the unit tests and provide feedback accordingly. Typically, the full prompt sent to the LLM will be composed of:

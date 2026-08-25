@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from notebook_ta.config.models import ExerciseConfig, GlobalConfig, TestDefinition
+from notebook_ta.config.models import (
+    ConfigurationError,
+    ExerciseConfig,
+    GlobalConfig,
+    TestDefinition,
+)
+from notebook_ta.config.prompt_templates import PromptTemplateError
 
 if TYPE_CHECKING:
     from notebook_ta.notebook.session import HintExchange
@@ -16,6 +22,24 @@ class Exercise:
     def __init__(self, config: ExerciseConfig, global_config: GlobalConfig) -> None:
         self._config = config
         self._global = global_config
+        self._validate_prompt_overrides()
+
+    def _validate_prompt_overrides(self) -> None:
+        """Fail early when an exercise prompt override cannot be expanded."""
+        prompt_config = self._global.prompts
+        for field_name in ("prompt_on_success", "prompt_on_failure"):
+            template = getattr(self._config, field_name)
+            if template is None:
+                continue
+            try:
+                prompt_config.expand_template(
+                    template,
+                    location=f"exercises.{self.id}.{field_name}",
+                )
+            except PromptTemplateError as exc:
+                raise ConfigurationError(
+                    f"Invalid prompt configuration for exercise {self.id!r}: {exc}"
+                ) from exc
 
     @property
     def id(self) -> str:
@@ -97,12 +121,24 @@ class Exercise:
         # 1. Active prompt
         parts: list[str] = []
         if test_results is None or all(r.passed for r in test_results):
+            template = self._config.prompt_on_success
             active_prompt = (
-                self._config.prompt_on_success or prompt_config.on_success
+                prompt_config.expand_template(
+                    template,
+                    location=f"exercises.{self.id}.prompt_on_success",
+                )
+                if template
+                else prompt_config.on_success
             )
         else:
+            template = self._config.prompt_on_failure
             active_prompt = (
-                self._config.prompt_on_failure or prompt_config.on_failure
+                prompt_config.expand_template(
+                    template,
+                    location=f"exercises.{self.id}.prompt_on_failure",
+                )
+                if template
+                else prompt_config.on_failure
             )
         parts.append(active_prompt)
         parts.append("\n\n")
