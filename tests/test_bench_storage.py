@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -107,6 +108,19 @@ class TestProjectStoreSaveRoundTrip:
 
         reloaded = ProjectStore(path).load()
         assert reloaded.draft_prompt_on_success == "updated"
+
+    def test_schema_v2_project_without_free_text_fields_still_loads(
+        self, tmp_path: Path
+    ) -> None:
+        path = tmp_path / "project.json"
+        project = ProjectStore(None).load()
+        data = project.model_dump(mode="json")
+        data.pop("draft_prompt_on_free_text")
+        path.write_text(json.dumps(data), encoding="utf-8")
+
+        reloaded = ProjectStore(path).load()
+
+        assert reloaded.draft_prompt_on_free_text == ""
 
     def test_save_leaves_no_temp_files_behind(self, tmp_path: Path) -> None:
         path = tmp_path / "project.json"

@@ -179,6 +179,32 @@ async def test_run_tests_reports_when_exercise_has_no_tests(user: User) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.nicegui_main_file("notebook_ta/bench/app.py")
+async def test_free_text_solution_controls_use_answer_ui_and_hide_tests(user: User) -> None:
+    state = BenchAppState(ProjectStore(None))
+    exercise = ExerciseConfig(
+        id="explain",
+        answer_type="free_text",
+        statement="Explain recursion.",
+        prompt_on_free_text="Evaluate.",
+    )
+    state.exercise_registry[exercise.id] = exercise
+    state.add_solution(exercise.id, code="A prose answer.")
+
+    @ui.page("/")
+    def page() -> None:
+        """Render the free-text answer controls under test."""
+        _build_solutions(state, exercise)
+
+    await user.open("/")
+    await user.should_see("Student answers (1)")
+    await user.should_see("Student answer")
+    await user.should_see("Add blank answer")
+    with pytest.raises(AssertionError, match="expected to find at least one"):
+        user.find("Run tests")
+
+
+@pytest.mark.asyncio
+@pytest.mark.nicegui_main_file("notebook_ta/bench/app.py")
 async def test_exercises_are_expanded_and_names_and_new_exercises_are_editable(
     user: User,
     tmp_path: Path,

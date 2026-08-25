@@ -299,7 +299,12 @@ def _render_exercise_matrix(
         for solution in solutions:
             with ui.card().classes("h-full bg-grey-1"):
                 ui.label(solution.label or solution.id[:8]).classes("font-bold")
-                ui.code(solution.code or "# Empty solution").classes(
+                empty_answer = (
+                    "Empty answer"
+                    if config.answer_type == "free_text"
+                    else "# Empty solution"
+                )
+                ui.code(solution.code or empty_answer).classes(
                     "w-full max-h-64 overflow-auto"
                 )
                 if solution.tags:

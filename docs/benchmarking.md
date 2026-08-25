@@ -44,8 +44,11 @@ third-party projects or student submissions.
    (e.g. `correct`, `wrong complexity`), and run their unit tests. For each exercise,
    benchmark-only setup code can define helper variables or functions before unit tests run; this
    setup is saved in the benchmark project JSON file, not in `exercises.toml`. Exercise edits
-   preserve the catalog's comments and formatting; remote TOML catalogs are read-only.
-3. **Runner** — write the `on_success` / `on_failure` prompts to test, select one or more models,
+   preserve the catalog's comments and formatting; remote TOML catalogs are read-only. Free-text
+   exercises use a prose editor, hide setup/test controls, and can generate tagged draft prose with
+   the internal model. Their answers are never executed.
+3. **Runner** — write the `on_success`, `on_failure`, and free-text evaluation prompts to test,
+   select one or more models,
    and click **Run Benchmark**. Prompts are frozen into a versioned snapshot (`V1`, `V2`, ...) the
    moment you click Run, so past results always remain reproducible even if you keep editing the
    prompt afterward.
@@ -53,7 +56,7 @@ third-party projects or student submissions.
    whose columns are historical model + prompt-version combinations. The latest run is selected by
    default; use the shared multi-select to compare other combinations and the tag filter to narrow
    the solution rows. Column headers show average TTFT, total generation time, and throughput for
-   the visible results. The left column shows each solution's code and opens the full exercise
+   the visible results. The left column shows each Python solution or free-text answer and opens the full exercise
    statement. Click any result cell to inspect its exact prompt, unit tests, metrics, and errors.
    Runs can be permanently deleted from this tab after acknowledging that deletion cannot be
    undone; all results produced by that run are deleted with it. If the exercise or solution
@@ -90,3 +93,7 @@ Everything (settings, per-exercise setup code, student solutions, prompt version
 full execution history with metrics) is saved to a single JSON project file via the **Save** button
 or autosave. API key values are excluded; project files contain only their environment-variable
 references. The autosave interval must be a positive number of seconds.
+
+Existing schema-v2 project files remain compatible. The persisted `code` and `student_code` field
+names are retained for both answer types; snapshots additionally record the answer type and
+evaluation criteria.

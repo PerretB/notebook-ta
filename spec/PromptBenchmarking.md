@@ -32,7 +32,10 @@ modal offers the most recent project, an existing-project file picker, and new-p
 Creating a project requires a project name and an exercises TOML file. The project name supplies
 the default JSON filename and the tag vocabulary starts with common solution-quality tags.
 
-Starting from a new project, the user will start defining exercises. For each exercise we have at least the exercise statement and one or more student solutions.
+Starting from a new project, the user will start defining exercises. For each exercise we have at
+least the exercise statement and one or more student answers. Python exercises use executable
+solutions and unit tests. Free-text exercises use opaque prose answers that are sent directly to
+the LLM and are never executed.
 
 When all the exercises are prepared the user can define the general prompts and select the models he wants to test in the Runner tab. Clicking on "Run Benchmark" will start testing the different prompts and models on the all the (exercise, student solution) pairs. The application collects the LLM answers and classical metrics such as the time-to-first-token, the total token used, the generation time...
 
@@ -80,12 +83,15 @@ The exercise tab enables editing exercises imported from the TOML catalog select
 creation. It is possible to indicate a related notebook file where exercise statements should be
 read if needed.
 
-For each exercise, the user can add one or several student solutions. Each solution can be annotated with user defined tags (like tags in Github issues), for example "correct", "wrong complexity", "logic flow", "missing edge-case"... The user can ask the internal model to generate a student solution based on the exercise statement and a selection of tags. The user should be able to define, run and see the results of the unit-tests on the sudent solution.
+For each exercise, the user can add one or several student answers. Each answer can be annotated
+with user-defined tags. The internal model can generate Python code or prose according to the
+exercise answer type. Python exercises expose setup and unit-test controls. Free-text exercises
+expose a prose editor and no execution or unit-test controls.
 
 
 7. Runner Tab
 This tab handles:
- - the definition of the general prompts to be tested (on_success prompt and on_failure prompt)
+ - the definition of the general prompts to be tested (`on_success`, `on_failure`, and free-text evaluation)
  - the selection of the models to be tested
  - the execution of the tests. 
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Coroutine
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from notebook_ta.bench.catalog import add_exercise as add_catalog_exercise
 from notebook_ta.bench.catalog import set_exercise_name
@@ -151,7 +151,15 @@ class BenchAppState:
         self.exercise_registry = {ex.id: ex for ex in exercises}
         _log.debug("Loaded %d exercises from %s", len(self.exercise_registry), path)
 
-    def add_exercise(self, exercise_id: str, name: str = "", statement: str = "") -> ExerciseConfig:
+    def add_exercise(
+        self,
+        exercise_id: str,
+        name: str = "",
+        statement: str = "",
+        answer_type: Literal["python", "free_text"] = "python",
+        evaluation_criteria: str = "",
+        prompt_on_free_text: str = "",
+    ) -> ExerciseConfig:
         """Create an exercise and persist it to the configured local TOML catalog."""
         normalized_id = exercise_id.strip()
         if not normalized_id:
@@ -162,6 +170,9 @@ class BenchAppState:
             id=normalized_id,
             name=name.strip() or None,
             statement=statement.strip() or None,
+            answer_type=answer_type,
+            evaluation_criteria=evaluation_criteria.strip() or None,
+            prompt_on_free_text=prompt_on_free_text.strip() or None,
         )
         add_catalog_exercise(self._editable_catalog_path(), exercise)
         self.exercise_registry[exercise.id] = exercise
@@ -252,6 +263,7 @@ class BenchAppState:
             id=self.project.next_prompt_version_id(),
             on_success=self.project.draft_prompt_on_success,
             on_failure=self.project.draft_prompt_on_failure,
+            on_free_text=self.project.draft_prompt_on_free_text,
         )
         self.project.prompt_versions.append(prompt_version)
 

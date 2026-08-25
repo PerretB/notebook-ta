@@ -147,6 +147,7 @@ what gets serialized to/from the project JSON file (spec §10).
 | `created_at` | `datetime` | Freeze timestamp. |
 | `on_success` | `str` | Frozen copy of the active on-success prompt. |
 | `on_failure` | `str` | Frozen copy of the active on-failure prompt. |
+| `on_free_text` | `str` | Frozen copy of the active free-text evaluation prompt. |
 
 ### `ModelUnderTest`
 
@@ -184,6 +185,8 @@ inputs, and so the drift hash can be recomputed if the hashing algorithm ever ch
 | `exercise_hash` | `str` (sha256) |
 | `student_hash` | `str` (sha256) |
 | `combined_hash` | `str` (sha256 of `exercise_hash + student_hash`) |
+| `answer_type` | `Literal["python", "free_text"]` |
+| `evaluation_criteria` | `str \| None` |
 
 ### `TokenUsage` and `ExecutionMetrics`
 
@@ -233,6 +236,7 @@ class BenchProject(BaseModel):
     settings: BenchSettings
     draft_prompt_on_success: str = ""
     draft_prompt_on_failure: str = ""
+    draft_prompt_on_free_text: str = ""
     draft_selected_model_labels: list[str] = []
     draft_run_name: str = ""
     solutions: list[StudentSolution] = []
@@ -479,6 +483,11 @@ prompt = job.exercise.build_prompt(solution.code, test_results, hint_history=Non
 `sys.path` is temporarily extended with `settings.python_path_dirs` before `importlib.import_module()`
 calls for external test modules (`module`/`function` style `TestDefinition`s), then restored — same
 mechanism the instructor would rely on for `PYTHONPATH`-based test helpers.
+
+For `answer_type = "free_text"`, the executor does not create a worker, execute solution or setup
+code, or invoke `TestRunner`. It rejects empty and oversized answers, then calls
+`Exercise.build_prompt(solution.code, None)` and records an empty test-result list. The legacy
+`solution.code` and snapshot `student_code` names remain serialized for schema-v2 compatibility.
 
 ### 9.4 Service disconnection resilience (spec §7)
 

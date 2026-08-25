@@ -30,12 +30,18 @@ def add_exercise(path: str | Path, exercise: ExerciseConfig) -> None:
         raise ConfigurationError(f"Exercise {exercise.id!r} already exists in {catalog_path}.")
 
     item = tomlkit.table()
+    if exercise.answer_type != "python":
+        item.add("answer_type", exercise.answer_type)
     if exercise.name:
         item.add("name", exercise.name)
     if exercise.statement:
         item.add("statement", exercise.statement)
     if exercise.additional_info:
         item.add("additional_info", exercise.additional_info)
+    if exercise.evaluation_criteria:
+        item.add("evaluation_criteria", exercise.evaluation_criteria)
+    if exercise.prompt_on_free_text:
+        item.add("prompt_on_free_text", exercise.prompt_on_free_text)
     exercises.add(exercise.id, item)
     _write_document(catalog_path, document.as_string())
 

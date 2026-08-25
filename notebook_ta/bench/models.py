@@ -76,12 +76,13 @@ class StudentSolution(BaseModel):
 
 
 class PromptVersion(BaseModel):
-    """A frozen (on_success, on_failure) prompt snapshot, assigned at "Run Benchmark" time."""
+    """A frozen prompt snapshot assigned when a benchmark run starts."""
 
     id: str
     created_at: datetime = Field(default_factory=_now)
     on_success: str
     on_failure: str
+    on_free_text: str = ""
 
 
 class ModelUnderTest(BaseModel):
@@ -115,6 +116,8 @@ class InputSnapshot(BaseModel):
     exercise_hash: str
     student_hash: str
     combined_hash: str
+    answer_type: Literal["python", "free_text"] = "python"
+    evaluation_criteria: str | None = None
 
 
 class TokenUsage(BaseModel):
@@ -169,6 +172,7 @@ class BenchProject(BaseModel):
     settings: BenchSettings
     draft_prompt_on_success: str = ""
     draft_prompt_on_failure: str = ""
+    draft_prompt_on_free_text: str = ""
     draft_selected_model_labels: list[str] = []
     draft_run_name: str = ""
     setup_code_by_exercise: dict[str, str] = Field(default_factory=dict)

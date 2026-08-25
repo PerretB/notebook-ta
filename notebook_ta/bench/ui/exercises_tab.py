@@ -64,7 +64,10 @@ def build(
                         value=config.name or "",
                         on_change=_on_exercise_name_change,
                     ).props("debounce=500").classes("w-full max-w-xl")
-                    _build_setup_code_dialog(state, config, on_catalog_change)
+                    if config.answer_type == "python":
+                        _build_setup_code_dialog(state, config, on_catalog_change)
+                    else:
+                        ui.badge("Free-text answer", color="secondary")
                     with ui.card().classes("w-full bg-grey-1"):
                         ui.markdown(config.statement or "*(no statement)*")
                     _build_solutions(state, config, on_catalog_change)
@@ -84,7 +87,10 @@ def _build_solutions(
     def render_solutions() -> None:
         solutions = state.project.solutions_for(config.id)
         with ui.row().classes("w-full items-center justify-between"):
-            ui.label(f"Student solutions ({len(solutions)})").classes("text-sm font-bold")
+            answer_label = "answers" if config.answer_type == "free_text" else "solutions"
+            ui.label(f"Student {answer_label} ({len(solutions)})").classes(
+                "text-sm font-bold"
+            )
             with ui.row().classes("items-center gap-2"):
 
                 def _add_blank() -> None:
@@ -93,7 +99,12 @@ def _build_solutions(
                     if on_solution_change:
                         on_solution_change()
 
-                ui.button("Add blank solution", on_click=_run_once(_add_blank))
+                ui.button(
+                    "Add blank answer"
+                    if config.answer_type == "free_text"
+                    else "Add blank solution",
+                    on_click=_run_once(_add_blank),
+                )
                 _build_generate_dialog(
                     state,
                     config,
@@ -140,8 +151,15 @@ def _build_solutions(
                         sol.code = event.value
                         state.mark_dirty()
 
+                    ui.label(
+                        "Student answer"
+                        if config.answer_type == "free_text"
+                        else "Student code"
+                    ).classes("text-caption text-grey-7")
                     ui.codemirror(
-                        value=solution.code, language="Python", on_change=_on_code_change
+                        value=solution.code,
+                        language="Markdown" if config.answer_type == "free_text" else "Python",
+                        on_change=_on_code_change,
                     ).classes("w-full").style("min-height: 200px")
 
                     tags_select = ui.select(
@@ -196,7 +214,11 @@ def _build_solutions(
                             on_solution_change()
 
                     with ui.row():
-                        ui.button("Run tests", on_click=_drop_queued_duplicates(_run_tests))
+                        if config.answer_type == "python":
+                            ui.button(
+                                "Run tests",
+                                on_click=_drop_queued_duplicates(_run_tests),
+                            )
                         ui.button("Remove", on_click=_run_once(_remove)).props(
                             "flat color=negative"
                         )
@@ -214,7 +236,18 @@ def _build_add_exercise_dialog(
         ui.label("Add exercise").classes("text-lg font-bold")
         exercise_id = ui.input("Exercise ID").classes("w-full")
         exercise_name = ui.input("New exercise name").classes("w-full")
+        answer_type = ui.select(
+            {"python": "Python", "free_text": "Free text"},
+            value="python",
+            label="Answer type",
+        ).classes("w-full")
         statement = ui.textarea("Statement").classes("w-full")
+        evaluation_criteria = ui.textarea(
+            "Evaluation criteria (free text)"
+        ).classes("w-full")
+        free_text_prompt = ui.textarea(
+            "Exercise free-text prompt (optional when Runner default is set)"
+        ).classes("w-full")
 
         def _add() -> None:
             try:
@@ -222,6 +255,9 @@ def _build_add_exercise_dialog(
                     exercise_id.value or "",
                     exercise_name.value or "",
                     statement.value or "",
+                    answer_type=answer_type.value or "python",
+                    evaluation_criteria=evaluation_criteria.value or "",
+                    prompt_on_free_text=free_text_prompt.value or "",
                 )
             except Exception as exc:
                 ui.notify(f"Could not add exercise: {exc}", type="negative")
@@ -414,7 +450,10 @@ def _build_generate_dialog(
                 accumulated = ""
                 async for chunk in service.generate_solution(config, tags):
                     accumulated += chunk
-                    preview.set_content(f"```python\n{accumulated}\n```")
+                    if config.answer_type == "free_text":
+                        preview.set_content(accumulated)
+                    else:
+                        preview.set_content(f"```python\n{accumulated}\n```")
                 state.add_solution(
                     config.id, code=accumulated, tags=tags, generated_by_internal_model=True
                 )

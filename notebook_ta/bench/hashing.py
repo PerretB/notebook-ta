@@ -28,10 +28,16 @@ def _serialize_tests(tests: list[TestDefinition]) -> str:
 
 def compute_exercise_hash(config: ExerciseConfig, setup_code: str | None = None) -> str:
     """Hash the exercise fields that affect the prompt and unit tests."""
+    effective_setup_code = (
+        (setup_code or None) if config.answer_type == "python" else None
+    )
     payload = {
+        "answer_type": config.answer_type,
         "statement": config.statement,
         "additional_info": config.additional_info,
-        "setup_code": setup_code or None,
+        "evaluation_criteria": config.evaluation_criteria,
+        "prompt_on_free_text": config.prompt_on_free_text,
+        "setup_code": effective_setup_code,
         "unit_test_timeout": config.unit_test_timeout,
         "max_student_answer_length": config.max_student_answer_length,
         "max_unit_test_output_length": config.max_unit_test_output_length,
@@ -49,17 +55,22 @@ def build_input_snapshot(
     config: ExerciseConfig, solution: StudentSolution, setup_code: str | None = None
 ) -> InputSnapshot:
     """Capture a verbatim snapshot of the inputs used for a benchmark run, with drift hashes."""
-    exercise_hash = compute_exercise_hash(config, setup_code)
+    effective_setup_code = (
+        (setup_code or None) if config.answer_type == "python" else None
+    )
+    exercise_hash = compute_exercise_hash(config, effective_setup_code)
     student_hash = compute_student_hash(solution.code)
     return InputSnapshot(
         exercise_statement=config.statement or "",
         additional_info=config.additional_info,
-        setup_code=setup_code or None,
+        setup_code=effective_setup_code,
         tests_serialized=_serialize_tests(config.tests),
         student_code=solution.code,
         exercise_hash=exercise_hash,
         student_hash=student_hash,
         combined_hash=_hash({"exercise": exercise_hash, "student": student_hash}),
+        answer_type=config.answer_type,
+        evaluation_criteria=config.evaluation_criteria,
     )
 
 

@@ -43,6 +43,19 @@ class TestRunNaming:
         state.build_run_jobs()
         assert state.dirty is True
 
+    def test_build_run_jobs_freezes_free_text_prompt(self) -> None:
+        state = make_state()
+        state.project.draft_prompt_on_free_text = "Evaluate the prose."
+
+        run, _jobs = state.build_run_jobs()
+
+        prompt_version = next(
+            version
+            for version in state.project.prompt_versions
+            if version.id == run.prompt_version_id
+        )
+        assert prompt_version.on_free_text == "Evaluate the prose."
+
     def test_build_run_jobs_carries_project_setup_code(self) -> None:
         state = make_state()
         state.exercise_registry["ex1"] = ExerciseConfig(id="ex1", statement="Example")
