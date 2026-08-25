@@ -193,7 +193,7 @@ The two namespace export fields are mutually exclusive.
 | `unit_test_timeout` | `float` |
 | `max_student_answer_length` | `int` |
 | `max_unit_test_output_length` | `int` |
-| `language` | `str` |
+| `language` | `str` | Notebook display and LLM response language; defaults to `"en"` |
 
 ### 3.2 TOML Format Reference
 
@@ -204,6 +204,10 @@ The system uses two separate TOML files:
 The `[llm]` section configures the active provider. When `model = "auto"`, the
 `[[llm.available_models]]` array is used by the setup wizard at load time to select the best fitting
 model.
+
+The root-level `language` setting selects the notebook display and LLM response language. English
+does not alter the assembled prompt; any other supported language adds an explicit response-language
+instruction.
 
 The `[prompts]` section holds the default prompt strings for success, failure, hints, the no-LLM
 fallback message, and the student-code safety instruction. It also holds `hint_history_length`.

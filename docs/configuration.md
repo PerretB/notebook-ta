@@ -162,7 +162,7 @@ Inline hook code and imported hook modules execute as trusted Python during
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `language` | string | `"en"` | Language code for notebook-facing messages and labels. Built-in languages are `"en"` and `"fr"`. Unsupported values emit a log warning and fall back to English. |
+| `language` | string | `"en"` | Language code for notebook-facing messages, labels, and LLM answers. Built-in languages are `"en"` and `"fr"`. English leaves the LLM prompt unchanged; other supported languages add an explicit response-language instruction. Unsupported values emit a log warning and fall back to English. |
 
 ---
 

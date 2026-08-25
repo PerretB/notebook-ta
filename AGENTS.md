@@ -39,17 +39,31 @@ diagrams, and the full file tree.
 
 ---
 
+## Python environment
+
+- The canonical Python environment is `.venv`.
+- Before the first Python command in a task, run:
+  `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1`
+- The bootstrap script is idempotent. Do not reinstall dependencies manually when it reports that
+  the environment is ready.
+- Never use Codex's bundled Python runtime for this project.
+- Use `.\.venv\Scripts\python.exe` for every Python command.
+- Use `scripts/bootstrap.ps1 -Recreate` only if `.venv` is corrupted or a complete rebuild is
+  explicitly required.
+- If bootstrap fails, report the error instead of falling back to another interpreter or installing
+  dependencies elsewhere.
+
 ## Build and Test
 
 ```bash
 # Install in editable mode with all dev dependencies
-python -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 
 # Run the full test suite
-python -m pytest tests/
+.\.venv\Scripts\python.exe -m pytest tests/
 
 # Type-check
-python -m mypy notebook_ta/
+.\.venv\Scripts\python.exe -m mypy notebook_ta/
 ```
 
 CI runs on Python 3.11+ across Ubuntu, macOS, and Windows — see

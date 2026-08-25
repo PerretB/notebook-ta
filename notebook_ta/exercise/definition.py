@@ -107,6 +107,12 @@ class Exercise:
         parts.append(active_prompt)
         parts.append("\n\n")
 
+        if self._global.language.casefold() != "en":
+            parts.append(
+                "Answer in the language identified by the BCP 47 language code "
+                f'"{self._global.language}".\n\n'
+            )
+
         # 2. Exercise metadata block
         parts.append("## Exercise\n\n")
         parts.append(f"{self.statement}\n")
