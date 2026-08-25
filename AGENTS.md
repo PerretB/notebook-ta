@@ -42,10 +42,8 @@ diagrams, and the full file tree.
 ## Python environment
 
 - The canonical Python environment is `.venv`.
-- Before the first Python command in a task, run:
+- If `.venv` is not present or appears corrupted, it can be rebuild with the idempotent bootstrap script:
   `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1`
-- The bootstrap script is idempotent. Do not reinstall dependencies manually when it reports that
-  the environment is ready.
 - Never use Codex's bundled Python runtime for this project.
 - Use `.\.venv\Scripts\python.exe` for every Python command.
 - Use `scripts/bootstrap.ps1 -Recreate` only if `.venv` is corrupted or a complete rebuild is
