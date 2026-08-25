@@ -17,7 +17,7 @@ from notebook_ta.testing.runner import TestResult
 # Helpers
 # ---------------------------------------------------------------------------
 
-def make_global_config(**prompt_overrides) -> GlobalConfig:
+def make_global_config(language: str = "en", **prompt_overrides) -> GlobalConfig:
     prompts = dict(
         on_success="Global success prompt.",
         on_failure="Global failure prompt.",
@@ -28,6 +28,7 @@ def make_global_config(**prompt_overrides) -> GlobalConfig:
     return GlobalConfig(
         llm=LLMConfig(provider="ollama", model="llama3.2:3b", base_url="http://localhost:11434"),
         prompts=PromptConfig(**prompts),
+        language=language,
     )
 
 
@@ -108,6 +109,20 @@ class TestPromptContextSelection:
 # ---------------------------------------------------------------------------
 
 class TestPromptSections:
+    def test_english_does_not_add_response_language_instruction(self) -> None:
+        ex = make_exercise(global_config=make_global_config(language="en"))
+
+        prompt = ex.build_prompt("code", [TestResult("t", True)])
+
+        assert "BCP 47 language code" not in prompt
+
+    def test_non_english_adds_response_language_instruction(self) -> None:
+        ex = make_exercise(global_config=make_global_config(language="fr"))
+
+        prompt = ex.build_prompt("code", [TestResult("t", True)])
+
+        assert 'Answer in the language identified by the BCP 47 language code "fr".' in prompt
+
     def test_default_safety_instruction_precedes_student_code(self) -> None:
         ex = make_exercise()
         prompt = ex.build_prompt("code", [TestResult("t", True)])
