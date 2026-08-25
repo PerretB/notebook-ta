@@ -89,7 +89,12 @@ def make_model(label: str = "m1") -> ModelUnderTest:
 
 
 def make_prompt_version() -> PromptVersion:
-    return PromptVersion(id="V1", on_success="Great job!", on_failure="Keep trying.")
+    return PromptVersion(
+        id="V1",
+        on_success="Great job!",
+        on_failure="Keep trying.",
+        on_free_text="Evaluate this answer.",
+    )
 
 
 class TestBuildJobs:
@@ -123,6 +128,70 @@ class TestBuildJobs:
 
 
 class TestBenchExecutorSequential:
+    @pytest.mark.asyncio
+    async def test_free_text_answer_skips_execution_and_tests(self) -> None:
+        config = ExerciseConfig(
+            id="explain",
+            answer_type="free_text",
+            statement="Explain recursion.",
+            evaluation_criteria="Mention the base case.",
+        )
+        job = BenchJob(
+            config,
+            make_solution("explain", "This is prose, not valid Python (("),
+            make_model(),
+            make_prompt_version(),
+            setup_code="raise RuntimeError('must not run')",
+        )
+        provider = FakeProvider(["feedback"])
+        run = BenchmarkRun(prompt_version_id="V1", model_labels=["m1"], job_count=1)
+        records = []
+
+        def on_progress(job, status, message, record) -> None:
+            if record is not None:
+                records.append(record)
+
+        with (
+            patch("notebook_ta.bench.executor.create_provider", return_value=provider),
+            patch("notebook_ta.bench.executor.run_solution_tests_with_timeout") as worker,
+        ):
+            await BenchExecutor().run([job], run, on_progress)
+
+        worker.assert_not_called()
+        assert records[0].status == "completed"
+        assert records[0].test_results == []
+        assert records[0].input_snapshot.setup_code is None
+        assert records[0].input_snapshot.answer_type == "free_text"
+        assert "## Evaluation Criteria" in records[0].full_prompt
+        assert "## Student Answer" in records[0].full_prompt
+
+    @pytest.mark.asyncio
+    async def test_empty_free_text_answer_fails_without_execution_or_llm(self) -> None:
+        config = ExerciseConfig(
+            id="explain",
+            answer_type="free_text",
+            statement="Explain recursion.",
+        )
+        job = BenchJob(config, make_solution("explain", " \n"), make_model(), make_prompt_version())
+        provider = FakeProvider(["unused"])
+        run = BenchmarkRun(prompt_version_id="V1", model_labels=["m1"], job_count=1)
+        records = []
+
+        def on_progress(job, status, message, record) -> None:
+            if record is not None:
+                records.append(record)
+
+        with (
+            patch("notebook_ta.bench.executor.create_provider", return_value=provider),
+            patch("notebook_ta.bench.executor.run_solution_tests_with_timeout") as worker,
+        ):
+            await BenchExecutor().run([job], run, on_progress)
+
+        worker.assert_not_called()
+        assert records[0].status == "failed"
+        assert records[0].error == "The student answer cannot be empty."
+        assert provider.call_count == 0
+
     @pytest.mark.asyncio
     async def test_thinking_is_recorded_and_ttft_uses_first_answer_token(self) -> None:
         provider = FakeThinkingProvider([])

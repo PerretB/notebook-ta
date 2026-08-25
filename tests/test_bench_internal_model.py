@@ -65,6 +65,22 @@ class TestBuildAuthoringPrompt:
         prompt = build_authoring_prompt(exercise, [])
         assert "Use type hints." in prompt
 
+    def test_free_text_requests_raw_prose_and_includes_criteria(self) -> None:
+        exercise = ExerciseConfig(
+            id="explain",
+            answer_type="free_text",
+            statement="Explain recursion.",
+            evaluation_criteria="Mention a base case.",
+        )
+
+        prompt = build_authoring_prompt(exercise, ["missing key concept"])
+
+        assert "Write a prose answer" in prompt
+        assert "missing key concept" in prompt
+        assert "Mention a base case." in prompt
+        assert "raw prose answer" in prompt
+        assert "raw Python code" not in prompt
+
 
 class TestInternalModelService:
     @pytest.mark.asyncio

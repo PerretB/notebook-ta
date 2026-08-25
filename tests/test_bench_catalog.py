@@ -46,3 +46,24 @@ def test_remote_catalog_is_read_only() -> None:
     """Authoring mutations must reject catalogs which cannot be written locally."""
     with pytest.raises(ConfigurationError, match="read-only"):
         set_exercise_name("https://example.test/exercises.toml", "ex1", "Name")
+
+
+def test_add_free_text_exercise_persists_answer_fields(tmp_path: Path) -> None:
+    path = tmp_path / "exercises.toml"
+    _write_catalog(path)
+
+    add_exercise(
+        path,
+        ExerciseConfig(
+            id="explain",
+            answer_type="free_text",
+            statement="Explain recursion.",
+            evaluation_criteria="Mention a base case.",
+            prompt_on_free_text="Evaluate this answer.",
+        ),
+    )
+
+    exercise = load_exercises(path)[1]
+    assert exercise.answer_type == "free_text"
+    assert exercise.evaluation_criteria == "Mention a base case."
+    assert exercise.prompt_on_free_text == "Evaluate this answer."

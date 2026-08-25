@@ -116,6 +116,7 @@ def _build_global_config(prompt_version: PromptVersion, model: ModelUnderTest) -
             on_success=prompt_version.on_success,
             on_failure=prompt_version.on_failure,
             on_no_llm="",
+            on_free_text=prompt_version.on_free_text or None,
         ),
     )
 
@@ -312,29 +313,39 @@ class BenchExecutor:
         snapshot = build_input_snapshot(job.exercise_config, job.solution, job.setup_code)
         global_config = _build_global_config(job.prompt_version, job.model)
         global_config.unit_test_timeout = self._get_unit_test_timeout()
-        exercise = Exercise(job.exercise_config, global_config)
-
         try:
-            worker_result = run_solution_tests_with_timeout(
-                exercise=exercise,
-                solution_code=job.solution.code,
-                setup_code=job.setup_code,
-                python_path_dirs=self._get_python_path_dirs(),
-                timeout=exercise.unit_test_timeout,
-            )
-            if worker_result.error is not None:
-                raise RuntimeError(worker_result.error)
-            assert worker_result.test_results is not None
-            test_results = TestRunner.truncate_output(
-                worker_result.test_results,
-                exercise.max_unit_test_output_length,
-                exercise.language,
-            )
+            exercise = Exercise(job.exercise_config, global_config)
+            if exercise.answer_type == "free_text":
+                if not job.solution.code.strip():
+                    raise ValueError(
+                        translate("magic_student_answer_empty", language=exercise.language)
+                    )
+                test_results: list[TestResult] = []
+            else:
+                worker_result = run_solution_tests_with_timeout(
+                    exercise=exercise,
+                    solution_code=job.solution.code,
+                    setup_code=job.setup_code,
+                    python_path_dirs=self._get_python_path_dirs(),
+                    timeout=exercise.unit_test_timeout,
+                )
+                if worker_result.error is not None:
+                    raise RuntimeError(worker_result.error)
+                assert worker_result.test_results is not None
+                test_results = TestRunner.truncate_output(
+                    worker_result.test_results,
+                    exercise.max_unit_test_output_length,
+                    exercise.language,
+                )
             answer_length = len(job.solution.code)
             if answer_length > exercise.max_student_answer_length:
                 raise ValueError(
                     translate(
-                        "magic_student_answer_too_long",
+                        (
+                            "magic_free_text_answer_too_long"
+                            if exercise.answer_type == "free_text"
+                            else "magic_student_answer_too_long"
+                        ),
                         {
                             "answer_length": answer_length,
                             "max_length": exercise.max_student_answer_length,
@@ -342,7 +353,11 @@ class BenchExecutor:
                         language=exercise.language,
                     )
                 )
-            prompt = exercise.build_prompt(job.solution.code, test_results, hint_history=None)
+            prompt = exercise.build_prompt(
+                job.solution.code,
+                None if exercise.answer_type == "free_text" else test_results,
+                hint_history=None,
+            )
 
             provider = self._get_provider(job.model)
             output, thinking_trace, metrics = await self._run_llm(provider, prompt)

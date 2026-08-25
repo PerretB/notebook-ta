@@ -37,6 +37,33 @@ class TestHashStability:
         changed = compute_exercise_hash(make_exercise(additional_info="Use recursion."))
         assert original != changed
 
+    def test_free_text_fields_change_hash(self) -> None:
+        original = compute_exercise_hash(
+            make_exercise(
+                answer_type="free_text",
+                prompt_on_free_text="Evaluate.",
+            )
+        )
+
+        assert original != compute_exercise_hash(
+            make_exercise(
+                answer_type="free_text",
+                prompt_on_free_text="Evaluate.",
+                evaluation_criteria="Mention a base case.",
+            )
+        )
+        assert original != compute_exercise_hash(make_exercise())
+
+    def test_free_text_hash_ignores_setup_code(self) -> None:
+        config = make_exercise(
+            answer_type="free_text",
+            prompt_on_free_text="Evaluate.",
+        )
+
+        assert compute_exercise_hash(config) == compute_exercise_hash(
+            config, setup_code="must not run"
+        )
+
     def test_setup_code_change_changes_hash(self) -> None:
         original = compute_exercise_hash(make_exercise())
         changed = compute_exercise_hash(make_exercise(), setup_code="expected = 5")
@@ -81,6 +108,21 @@ class TestInputSnapshot:
         assert snapshot.setup_code == "expected = 5"
         assert snapshot.student_code == solution.code
         assert snapshot.combined_hash
+
+    def test_free_text_snapshot_captures_answer_metadata_without_setup(self) -> None:
+        config = make_exercise(
+            answer_type="free_text",
+            prompt_on_free_text="Evaluate.",
+            evaluation_criteria="Mention a base case.",
+        )
+
+        snapshot = build_input_snapshot(
+            config, make_solution("A prose answer."), setup_code="must not run"
+        )
+
+        assert snapshot.answer_type == "free_text"
+        assert snapshot.evaluation_criteria == "Mention a base case."
+        assert snapshot.setup_code is None
 
 
 class TestIsStale:

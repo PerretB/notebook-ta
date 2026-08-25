@@ -72,6 +72,11 @@ def build(state: BenchAppState) -> None:
             value=project.draft_prompt_on_failure,
             on_change=tracked_on_change(state, project, "draft_prompt_on_failure"),
         ).classes("w-full").props("rows=4")
+        ui.textarea(
+            "Free-text evaluation prompt",
+            value=project.draft_prompt_on_free_text,
+            on_change=tracked_on_change(state, project, "draft_prompt_on_free_text"),
+        ).classes("w-full").props("rows=4")
 
         with ui.row().classes("items-center gap-2"):
             ui.label("Prompt history:")
@@ -87,6 +92,7 @@ def build(state: BenchAppState) -> None:
                 )
                 project.draft_prompt_on_success = prompt_version.on_success
                 project.draft_prompt_on_failure = prompt_version.on_failure
+                project.draft_prompt_on_free_text = prompt_version.on_free_text
                 state.mark_dirty()
                 ui.navigate.reload()
 
