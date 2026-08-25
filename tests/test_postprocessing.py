@@ -63,6 +63,13 @@ def postprocess(request, answer, is_complete):
     assert "def postprocess" in (config.answer_postprocessor.code or "")
 
 
+def test_request_exposes_answer_neutral_context() -> None:
+    request = make_request()
+
+    assert request.answer_type == "python"
+    assert request.student_answer == request.student_code
+
+
 def test_inline_postprocessor_modifies_answer() -> None:
     """Inline code should resolve the required postprocess function."""
     hook = load_answer_postprocessor(

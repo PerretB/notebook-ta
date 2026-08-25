@@ -141,7 +141,9 @@ Describes a single LLM model option and its hardware requirements.
 | `on_success`         | `str`  | —       | Prompt used when all unit tests pass                                      |
 | `on_failure`         | `str`  | —       | Prompt used when tests fail; also used for subsequent hint requests        |
 | `on_no_llm`          | `str`  | —       | Message displayed (as Markdown) when no LLM is reachable                 |
+| `on_free_text`       | `str \| None` | `None` | Default evaluation prompt for free-text exercises |
 | `student_code_safety_instruction` | `str` | Built-in safety instruction | Instruction placed immediately before student code |
+| `student_text_safety_instruction` | `str` | Built-in safety instruction | Instruction placed immediately before an untrusted free-text answer |
 | `hint_history_length`| `int`  | `3`     | Max number of previous hint exchanges included in the LLM context         |
 | `fragments`          | `dict[str, str]` | `{}` | Recursively composable prompt fragments, stored fully resolved |
 
@@ -181,11 +183,14 @@ The two namespace export fields are mutually exclusive.
 | Field              | Type                    | Description                                           |
 |--------------------|-------------------------|-------------------------------------------------------|
 | `id`               | `str`                   | Unique exercise identifier (used in cell magic)       |
+| `answer_type`      | `Literal["python", "free_text"]` | Submission behavior; defaults to `"python"` |
 | `statement`        | `str`                   | Exercise description passed to the LLM                |
 | `expected_output`  | `str \| None`           | Example expected output                               |
 | `additional_info`  | `str \| None`           | Any other relevant context for the LLM                |
+| `evaluation_criteria` | `str \| None` | Optional free-text evaluation criteria |
 | `prompt_on_success`| `str \| None`           | Overrides global `prompts.on_success`                 |
 | `prompt_on_failure`| `str \| None`           | Overrides global `prompts.on_failure`                 |
+| `prompt_on_free_text`| `str \| None`         | Overrides global `prompts.on_free_text`               |
 | `unit_test_timeout` | `float \| None` | Overrides the global per-test timeout |
 | `max_student_answer_length` | `int \| None` | Overrides the global answer limit |
 | `max_unit_test_output_length` | `int \| None` | Overrides the global cumulative test-message limit |
@@ -340,13 +345,15 @@ plus a reference to the active `GlobalConfig` (for prompt and metadata fallback)
 Assembles a structured prompt string with the following sections in order:
 
 1. **Active prompt** — selected based on context:
+   - Free-text answer → expanded exercise `prompt_on_free_text` or resolved global `on_free_text`
    - All tests pass → expanded exercise `prompt_on_success` or resolved global `on_success`
    - Tests failed (first call or subsequent hint requests) → exercise `prompt_on_failure` or global
      `on_failure`
 2. **Exercise metadata block** — `statement`, and any provided optional fields
    (`expected_output`, `additional_info`)
-3. **Student code block** — the configurable `student_code_safety_instruction`, followed
-   immediately by the raw cell body enclosed in a fenced code block
+3. **Student submission block** — either the configurable code safety instruction and a fenced
+   Python block, or the free-text safety instruction, optional evaluation criteria, and the raw
+   answer under a `Student Answer` heading
 4. **Test results block** — present only when tests failed; lists each test name, pass/fail status,
    and associated message
 5. **Hint history block** — present only for hint requests; contains the previous
@@ -356,8 +363,8 @@ Assembles a structured prompt string with the following sections in order:
 Global templates are expanded eagerly when `PromptConfig` is validated. Exercise overrides retain
 their source strings, are validated when the `Exercise` is constructed, and are expanded when
 selected. Inserted fragments are not scanned a second time, so escaped literal double braces remain
-literal. Fragment expansion never applies to exercise metadata, student code, unit-test output, or
-hint history.
+literal. Fragment expansion never applies to exercise metadata, evaluation criteria, student
+submissions, unit-test output, or hint history.
 
 ### 5.3 `ExerciseRegistry` (`exercise/registry.py`)
 
@@ -432,7 +439,7 @@ IPython instance. Called automatically by `notebook_ta.load()`.
 `NotebookTAMagic.cell_magic(line, cell)`:
 
 - `line` — the exercise ID (e.g. `ex1`)
-- `cell` — the student's code (cell body below the magic line)
+- `cell` — the student's Python or free-text answer (cell body below the magic line)
 
 Execution steps:
 
@@ -441,7 +448,9 @@ Execution steps:
 2. Reserve the `NotebookTAMagic` instance's in-process busy guard; if another
    notebook-ta operation is already running, call `display.display_busy_message()` and return
 3. Disable all registered hint buttons and set their label to `"Busy"`
-4. Execute `cell` in the IPython user namespace via `ip.run_cell(cell)` and inspect the returned
+4. For `answer_type = "free_text"`, reject empty or oversized answers and stream LLM evaluation
+   without executing the cell or running tests. Otherwise, execute `cell` in the IPython user
+   namespace via `ip.run_cell(cell)` and inspect the returned
    `ExecutionResult`. If `error_before_exec` or `error_in_exec` is set, display the execution
    failure and stop without running tests or contacting the LLM.
 5. Run `TestRunner.run(exercise, ip.user_ns)` only after successful cell execution

@@ -42,6 +42,17 @@ def make_exercise(exercise_id: str = "ex1") -> Exercise:
     return Exercise(config=cfg, global_config=make_global_config())
 
 
+def make_free_text_exercise(exercise_id: str = "explain") -> Exercise:
+    """Create a free-text exercise with an exercise-level evaluation prompt."""
+    cfg = ExerciseConfig(
+        id=exercise_id,
+        answer_type="free_text",
+        statement="Explain recursion.",
+        prompt_on_free_text="Evaluate this explanation.",
+    )
+    return Exercise(config=cfg, global_config=make_global_config())
+
+
 def make_ip_stub(user_ns: dict | None = None) -> MagicMock:
     """Create a minimal IPython stub."""
     ip = MagicMock()
@@ -164,6 +175,58 @@ class TestCellMagicAllPass:
             loop.close()
 
         ip.run_cell.assert_called_once_with("x = 42")
+
+
+class TestFreeTextCellMagic:
+    @patch("notebook_ta.notebook.magic.display")
+    def test_submission_skips_python_and_tests_and_triggers_llm(self, mock_display) -> None:
+        ip = make_ip_stub()
+        magic = make_magic(ip=ip, exercises=[make_free_text_exercise()])
+
+        with (
+            patch.object(magic._runner, "run") as run_tests,
+            patch.object(magic, "_trigger_llm", return_value=None) as trigger_llm,
+        ):
+            magic.notebook_ta("explain", "Recursion calls a function itself.")
+
+        ip.run_cell.assert_not_called()
+        run_tests.assert_not_called()
+        trigger_llm.assert_called_once_with(
+            "explain",
+            "Recursion calls a function itself.",
+            results=None,
+            hint_history=None,
+        )
+        mock_display.display_success.assert_not_called()
+        mock_display.display_test_results.assert_not_called()
+        mock_display.display_hints_button.assert_not_called()
+
+    @patch("notebook_ta.notebook.magic._log")
+    @patch("notebook_ta.notebook.magic.display")
+    def test_empty_submission_is_rejected(self, mock_display, mock_log) -> None:
+        ip = make_ip_stub()
+        magic = make_magic(ip=ip, exercises=[make_free_text_exercise()])
+
+        with patch.object(magic, "_trigger_llm") as trigger_llm:
+            magic.notebook_ta("explain", "  \n")
+
+        ip.run_cell.assert_not_called()
+        trigger_llm.assert_not_called()
+        mock_log.error.assert_called_once_with("The student answer cannot be empty.")
+        mock_display.display_success.assert_not_called()
+
+    @patch("notebook_ta.notebook.magic._log")
+    def test_oversized_submission_is_rejected_before_llm(self, mock_log) -> None:
+        ip = make_ip_stub()
+        exercise = make_free_text_exercise()
+        exercise.config.max_student_answer_length = 5
+        magic = make_magic(ip=ip, exercises=[exercise])
+
+        magic.notebook_ta("explain", "too long")
+
+        ip.run_cell.assert_not_called()
+        magic._llm.is_available.assert_not_called()
+        assert "No request was sent to the LLM" in mock_log.error.call_args.args[0]
 
 
 # ---------------------------------------------------------------------------

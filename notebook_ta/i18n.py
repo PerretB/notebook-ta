@@ -41,6 +41,11 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
             "maximum ({max_length} characters). Unit tests ran, but no request was sent "
             "to the LLM."
         ),
+        "magic_free_text_answer_too_long": (
+            "Student answer length ({answer_length} characters) exceeds the configured "
+            "maximum ({max_length} characters). No request was sent to the LLM."
+        ),
+        "magic_student_answer_empty": "The student answer cannot be empty.",
         "display_unavailable": (
             "**Exercise `{exercise_id}` not found.**\n\n"
             "Please check the exercise ID in the magic line and ensure "
@@ -146,6 +151,12 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
             "dépasse la limite configurée ({max_length} caractères). Les tests "
             "unitaires ont été exécutés, mais aucune requête n'a été envoyée au LLM."
         ),
+        "magic_free_text_answer_too_long": (
+            "La longueur de la réponse de l'étudiant ({answer_length} caractères) "
+            "dépasse la limite configurée ({max_length} caractères). Aucune requête "
+            "n'a été envoyée au LLM."
+        ),
+        "magic_student_answer_empty": "La réponse de l'étudiant ne peut pas être vide.",
         "display_unavailable": (
             "**Exercice `{exercise_id}` introuvable.**\n\n"
             "Avez-vous appelé `notebook_ta.load()` ?"

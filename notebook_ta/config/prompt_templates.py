@@ -11,9 +11,11 @@ _RESERVED_FRAGMENT_NAMES = frozenset(
         "fragments",
         "hint_history_length",
         "on_failure",
+        "on_free_text",
         "on_no_llm",
         "on_success",
         "student_code_safety_instruction",
+        "student_text_safety_instruction",
     }
 )
 

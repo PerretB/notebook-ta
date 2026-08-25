@@ -6,6 +6,7 @@ import pytest
 
 from notebook_ta.config.models import (
     DEFAULT_STUDENT_CODE_SAFETY_INSTRUCTION,
+    DEFAULT_STUDENT_TEXT_SAFETY_INSTRUCTION,
     ConfigurationError,
     ExerciseConfig,
     GlobalConfig,
@@ -133,6 +134,32 @@ class TestPromptContextSelection:
         ):
             make_exercise(prompt_on_failure="{{ missing }}")
 
+    def test_free_text_requires_dedicated_prompt(self) -> None:
+        with pytest.raises(ConfigurationError, match="neither prompt_on_free_text"):
+            make_exercise(answer_type="free_text")
+
+    def test_free_text_uses_exercise_prompt_over_global_prompt(self) -> None:
+        ex = make_exercise(
+            answer_type="free_text",
+            prompt_on_free_text="Exercise evaluation prompt.",
+            global_config=make_global_config(on_free_text="Global evaluation prompt."),
+        )
+
+        prompt = ex.build_prompt("My explanation", test_results=None)
+
+        assert "Exercise evaluation prompt." in prompt
+        assert "Global evaluation prompt." not in prompt
+
+    def test_free_text_uses_global_prompt(self) -> None:
+        ex = make_exercise(
+            answer_type="free_text",
+            global_config=make_global_config(on_free_text="Global evaluation prompt."),
+        )
+
+        prompt = ex.build_prompt("My explanation", test_results=None)
+
+        assert "Global evaluation prompt." in prompt
+
 
 # ---------------------------------------------------------------------------
 # Preamble and structural sections
@@ -183,6 +210,37 @@ class TestPromptSections:
         ex = make_exercise()
         prompt = ex.build_prompt("def add(a,b): return a+b", [TestResult("t", True)])
         assert "```python\ndef add(a,b): return a+b\n```" in prompt
+
+    def test_free_text_prompt_uses_answer_section_and_evaluation_criteria(self) -> None:
+        ex = make_exercise(
+            answer_type="free_text",
+            prompt_on_free_text="Evaluate this answer.",
+            evaluation_criteria="Mention the base case.",
+        )
+
+        prompt = ex.build_prompt("Recursion calls itself.", test_results=None)
+
+        assert "## Evaluation Criteria\n\nMention the base case." in prompt
+        assert "## Student Answer" in prompt
+        assert DEFAULT_STUDENT_TEXT_SAFETY_INSTRUCTION in prompt
+        assert "Recursion calls itself." in prompt
+        assert "## Student Code" not in prompt
+        assert "```python" not in prompt
+
+    def test_free_text_prompt_rejects_test_results_and_hint_history(self) -> None:
+        ex = make_exercise(
+            answer_type="free_text",
+            prompt_on_free_text="Evaluate this answer.",
+        )
+
+        with pytest.raises(ValueError, match="unit test results"):
+            ex.build_prompt("answer", [TestResult("test", True)])
+        with pytest.raises(ValueError, match="hint history"):
+            ex.build_prompt(
+                "answer",
+                None,
+                [HintExchange("previous answer", "previous feedback")],
+            )
 
     def test_optional_metadata_included_when_set(self) -> None:
         ex = make_exercise(

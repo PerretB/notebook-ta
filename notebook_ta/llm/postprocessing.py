@@ -31,6 +31,12 @@ class LLMRequest:
     provider: str
     model: str
     temperature: float
+    answer_type: Literal["python", "free_text"] = "python"
+
+    @property
+    def student_answer(self) -> str:
+        """Return the submitted answer using answer-type-neutral terminology."""
+        return self.student_code
 
 
 AnswerPostprocessor: TypeAlias = Callable[  # noqa: UP040 - Python 3.11 support
