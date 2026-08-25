@@ -31,7 +31,9 @@ min_vram_gb = 0.0
 
 [prompts]
 on_success = """
-You are a programming tutor. The student's code passed all unit tests.
+{{ prompt_base }}
+
+The student's code passed all unit tests.
 Provide a concise, high-level analysis of the solution:
 - Comment on correctness, clarity, and style.
 - Point out any potential improvements (edge cases, efficiency, readability).
@@ -40,7 +42,9 @@ Provide a concise, high-level analysis of the solution:
 """
 
 on_failure = """
-You are a programming tutor. The student's code failed one or more unit tests.
+{{ prompt_base }}
+
+The student's code failed one or more unit tests.
 Provide targeted, pedagogical feedback:
 - Do NOT give away the solution.
 - Help the student understand what went wrong conceptually.
@@ -62,6 +66,11 @@ Your code has been checked against the unit tests above.
 """
 
 hint_history_length = 3
+
+[prompts.fragments]
+prompt_base = """
+You are a programming tutor. Use an encouraging and constructive tone.
+"""
 
 # Optional: transform each accumulated LLM answer update before display.
 # [answer_postprocessor]

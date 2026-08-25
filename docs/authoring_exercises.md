@@ -169,14 +169,25 @@ max_unit_test_output_length = 8000
 
 ## Exercise-Level Prompt Overrides
 
-You can override the global prompts for a specific exercise:
+You can override the global prompts for a specific exercise. Overrides may reuse fragments from the
+global configuration's `[prompts.fragments]` table:
 
 ```toml
 [exercises.ex_hard]
 statement = "Implement Dijkstra's algorithm."
-prompt_on_success = "Excellent! Analyse the time and space complexity of this graph algorithm."
-prompt_on_failure = "Graph algorithms can be tricky. Think about the data structures you need. When the student asks for hints, escalate guidance gradually."
+prompt_on_success = """{{ prompt_base }}
+
+Excellent! Analyse the time and space complexity of this graph algorithm.
+"""
+prompt_on_failure = """{{ prompt_base }}
+
+Graph algorithms can be tricky. Think about the data structures you need. When the student asks
+for hints, escalate guidance gradually.
+"""
 ```
+
+An unknown or malformed fragment reference in an exercise override raises `ConfigurationError`
+while notebook-ta loads, before the exercise can be used.
 
 ---
 

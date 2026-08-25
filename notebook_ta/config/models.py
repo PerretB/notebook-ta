@@ -18,6 +18,11 @@ from pydantic import (
     model_validator,
 )
 
+from notebook_ta.config.prompt_templates import (
+    expand_prompt_template,
+    resolve_prompt_fragments,
+)
+
 NonEmptyString: TypeAlias = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1)
 ]
@@ -105,6 +110,30 @@ class PromptConfig(_StrictConfigModel):
     on_no_llm: str
     student_code_safety_instruction: str = DEFAULT_STUDENT_CODE_SAFETY_INSTRUCTION
     hint_history_length: int = Field(default=3, ge=0)
+    fragments: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def resolve_templates(self) -> PromptConfig:
+        """Resolve fragments and all global prompt-bearing string fields."""
+        self.fragments = resolve_prompt_fragments(self.fragments)
+        self.on_success = self.expand_template(
+            self.on_success, location="prompts.on_success"
+        )
+        self.on_failure = self.expand_template(
+            self.on_failure, location="prompts.on_failure"
+        )
+        self.on_no_llm = self.expand_template(
+            self.on_no_llm, location="prompts.on_no_llm"
+        )
+        self.student_code_safety_instruction = self.expand_template(
+            self.student_code_safety_instruction,
+            location="prompts.student_code_safety_instruction",
+        )
+        return self
+
+    def expand_template(self, template: str, *, location: str) -> str:
+        """Expand an instructor-authored template using the resolved fragments."""
+        return expand_prompt_template(template, self.fragments, location=location)
 
 
 class AnswerPostprocessorConfig(_StrictConfigModel):

@@ -43,6 +43,7 @@ notebook_ta/
 ├── config/
 │   ├── __init__.py
 │   ├── models.py             # Pydantic v2 models: GlobalConfig, ExerciseConfig, …
+│   ├── prompt_templates.py   # Prompt-fragment validation and deterministic expansion
 │   └── loader.py             # TOML loading from local paths and remote URLs
 ├── llm/
 │   ├── __init__.py
@@ -142,6 +143,13 @@ Describes a single LLM model option and its hardware requirements.
 | `on_no_llm`          | `str`  | —       | Message displayed (as Markdown) when no LLM is reachable                 |
 | `student_code_safety_instruction` | `str` | Built-in safety instruction | Instruction placed immediately before student code |
 | `hint_history_length`| `int`  | `3`     | Max number of previous hint exchanges included in the LLM context         |
+| `fragments`          | `dict[str, str]` | `{}` | Recursively composable prompt fragments, stored fully resolved |
+
+`PromptConfig` validates fragment names and eagerly resolves every fragment plus all global
+prompt-bearing fields. References use `{{ fragment_name }}` syntax. Unknown or malformed references,
+reserved or invalid names, non-string values, and cycles are validation errors. Four opening or
+closing braces escape a literal double-brace delimiter. No expressions or runtime values are
+evaluated.
 
 #### `AnswerPostprocessorConfig`
 
@@ -211,6 +219,10 @@ instruction.
 
 The `[prompts]` section holds the default prompt strings for success, failure, hints, the no-LLM
 fallback message, and the student-code safety instruction. It also holds `hint_history_length`.
+Reusable strings live under `[prompts.fragments]`; they may compose other fragments and are expanded
+in all global prompt-bearing strings. Exercise `prompt_on_success` and `prompt_on_failure` overrides
+resolve against this same global fragment mapping. Prompt references are validated before LLM
+provider setup.
 
 The optional `[answer_postprocessor]` table defines trusted inline Python code or an external
 callable. Inline code must define `postprocess(request, answer, is_complete)`. The hook is resolved during
@@ -328,7 +340,7 @@ plus a reference to the active `GlobalConfig` (for prompt and metadata fallback)
 Assembles a structured prompt string with the following sections in order:
 
 1. **Active prompt** — selected based on context:
-   - All tests pass → exercise `prompt_on_success` or global `on_success`
+   - All tests pass → expanded exercise `prompt_on_success` or resolved global `on_success`
    - Tests failed (first call or subsequent hint requests) → exercise `prompt_on_failure` or global
      `on_failure`
 2. **Exercise metadata block** — `statement`, and any provided optional fields
@@ -340,6 +352,12 @@ Assembles a structured prompt string with the following sections in order:
 5. **Hint history block** — present only for hint requests; contains the previous
    `hint_history_length` `(student_code, hint_response)` exchanges, giving the LLM the context it
    needs to naturally escalate the specificity of its guidance
+
+Global templates are expanded eagerly when `PromptConfig` is validated. Exercise overrides retain
+their source strings, are validated when the `Exercise` is constructed, and are expanded when
+selected. Inserted fragments are not scanned a second time, so escaped literal double braces remain
+literal. Fragment expansion never applies to exercise metadata, student code, unit-test output, or
+hint history.
 
 ### 5.3 `ExerciseRegistry` (`exercise/registry.py`)
 
