@@ -42,10 +42,10 @@ diagrams, and the full file tree.
 ## Python environment
 
 - The canonical Python environment is `.venv`.
+- Never use Codex's bundled Python runtime for this project.
+- Use `.\.venv\Scripts\python.exe` for every Python command, use sandbox escalation to run this command.
 - If `.venv` is not present or appears corrupted, it can be rebuild with the idempotent bootstrap script:
   `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1`
-- Never use Codex's bundled Python runtime for this project.
-- Use `.\.venv\Scripts\python.exe` for every Python command.
 - Use `scripts/bootstrap.ps1 -Recreate` only if `.venv` is corrupted or a complete rebuild is
   explicitly required.
 - If bootstrap fails, report the error instead of falling back to another interpreter or installing

@@ -169,12 +169,13 @@ Exactly one of `code` or (`module` + `function`) is required when this optional 
 |------------|---------------|-----------------------------------------------------------|
 | `name`     | `str`         | Human-readable test name                                  |
 | `code`     | `str \| None` | Inline Python function source (multiline string)          |
-| `module`   | `str \| None` | Dotted module path for an external test function          |
-| `function` | `str \| None` | Function name within the external module                  |
+| `module`   | `str \| None` | Optional dotted module path for an external test function |
+| `function` | `str \| None` | Function name in the module or current global scope       |
 | `student_symbols` | `list[str] \| None` | Selected namespace symbols exported as a dictionary |
 | `export_student_globals` | `bool` | Explicitly export the full student namespace |
 
-Exactly one of (`code`) or (`module` + `function`) must be provided. Enforced by a Pydantic model
+Exactly one of `code` or `function` must be provided. When `function` is used, `module` is optional;
+omitting it resolves the callable from the current global scope. Enforced by a Pydantic model
 validator.
 The two namespace export fields are mutually exclusive.
 
@@ -245,6 +246,7 @@ Each exercise is declared as `[exercises.<id>]`. Tests are declared as `[[exerci
 arrays. Test code can be:
 
 - An inline Python function source string in the `code` field
+- A reference to a function in the current global scope via the `function` field
 - A reference to an external function via `module` and `function` fields
 
 ### 3.3 Configuration Loading (`config/loader.py`)
@@ -419,9 +421,12 @@ Both styles may coexist in the same exercise's test list.
 
 ### 6.4 Test Resolution
 
-**Inline (`code` field)**: The source string is `exec()`'d into an isolated namespace dict. The
-function whose name matches the `function` field (or the only callable defined, if `function` is not
-specified) is extracted and called.
+**Inline (`code` field)**: The source string is `exec()`'d into an isolated namespace dict. Its only
+callable is extracted and called.
+
+**Current scope (`function` field)**: When `module` is omitted, the named function is retrieved from
+the current notebook or benchmark namespace. A missing or non-callable object is reported as a
+failed test.
 
 **External (`module` + `function` fields)**: `importlib.import_module(module)` is called and the
 function is retrieved with `getattr`. The module must be importable from the notebook's working

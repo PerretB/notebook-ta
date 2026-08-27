@@ -125,7 +125,7 @@ class TestRunner:
     ) -> TestResult:
         """Resolve and invoke a single test function, returning a TestResult."""
         try:
-            fn = self._resolve(test_def, language)
+            fn = self._resolve(test_def, namespace, language)
         except Exception as exc:
             return TestResult(name=test_def.name, passed=False, message=str(exc))
 
@@ -208,7 +208,9 @@ class TestRunner:
         return TestRunner._interpret_result(name, result, captured, language)
 
     @staticmethod
-    def _resolve(test_def: TestDefinition, language: str) -> Callable[..., Any]:
+    def _resolve(
+        test_def: TestDefinition, namespace: dict[str, Any], language: str
+    ) -> Callable[..., Any]:
         """Return the callable for a TestDefinition."""
         if test_def.code is not None:
             # Inline source: use a separate globals dictionary (not a security sandbox).
@@ -250,12 +252,27 @@ class TestRunner:
                     language=language,
                 )
             )
-        else:
-            # External module + function
-            assert test_def.module is not None
+        if test_def.module is not None:
+            # External module + function.
             assert test_def.function is not None
             module = importlib.import_module(test_def.module)
             return cast(Callable[..., Any], getattr(module, test_def.function))
+
+        # Function-only definitions resolve from the current notebook/benchmark namespace.
+        assert test_def.function is not None
+        candidate = namespace.get(test_def.function)
+        if not callable(candidate):
+            raise LookupError(
+                translate(
+                    "runner_global_function_missing",
+                    {
+                        "function_name": test_def.function,
+                        "test_name": test_def.name,
+                    },
+                    language=language,
+                )
+            )
+        return cast(Callable[..., Any], candidate)
 
     @staticmethod
     def _build_args(

@@ -47,8 +47,9 @@ runtime error.
 
 Inline test source is resolved in the notebook process before its callable is sent to a
 timeout-bounded child. Consequently, top-level statements in inline tests can execute in the
-kernel. Importing an external test module can likewise execute that module's top-level code in the
-kernel. The test callable itself runs in a child process with the kernel user's OS permissions.
+kernel. Function-only tests retrieve a callable already present in the notebook namespace, while
+importing an external test module can execute that module's top-level code in the kernel. The test
+callable itself runs in a child process with the kernel user's OS permissions.
 
 Inline answer-postprocessor code is executed in the notebook kernel while configuration is loaded.
 External postprocessors execute module top-level code when imported and run in the kernel as an

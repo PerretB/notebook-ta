@@ -102,6 +102,10 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
             "'function' to disambiguate. Found: {callables}"
         ),
         "runner_inline_no_callable": "No callable found in inline test code for {test_name!r}.",
+        "runner_global_function_missing": (
+            "Function {function_name!r} for test {test_name!r} is not defined as a callable "
+            "in the current global scope."
+        ),
         "runner_missing_student_name": (
             "Name {name!r} is not defined in the student's namespace. Make sure the "
             "student defines it before running the tests."
@@ -214,6 +218,10 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "runner_inline_no_callable": (
             "Aucun objet appelable trouvé dans le code de test pour l'exercice {test_name!r}."
+        ),
+        "runner_global_function_missing": (
+            "La fonction {function_name!r} du test {test_name!r} n'est pas définie comme "
+            "objet appelable dans la portée globale actuelle."
         ),
         "runner_missing_student_name": (
             "Le nom {name!r} n'est pas défini."),

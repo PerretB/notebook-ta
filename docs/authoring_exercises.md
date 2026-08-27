@@ -92,6 +92,21 @@ Any text printed to stdout is also captured and included in the message. Common 
 text-style sequences (including standard and bright colors, bold, and underline) are rendered in
 the notebook output, so existing terminal-style custom test reports remain readable.
 
+### Tests from the Current Global Scope
+
+If a test function is already defined in the notebook's current global scope, specify only its
+name:
+
+```toml
+[[exercises.ex1.tests]]
+name = "Custom add test"
+function = "test_add"
+```
+
+The named object must exist and be callable when the exercise runs. Otherwise, the test is
+reported as failed with a message identifying the missing function. Its parameters are resolved
+from the same global scope in the usual way.
+
 ### External Tests
 
 For complex tests, reference a function in an importable Python module:
@@ -119,8 +134,8 @@ function is not called and the test is reported as failed with the missing name.
 
 ### Passing student symbols to tests
 
-The following rules apply to both inline and external tests. Put `student_symbols` or
-`export_student_globals` in the test's TOML table alongside either `code` or `module`/`function`.
+The following rules apply to inline, global-scope, and external tests. Put `student_symbols` or
+`export_student_globals` in the test's TOML table alongside `code` or `function`.
 
 #### Named parameters
 
