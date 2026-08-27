@@ -507,6 +507,12 @@ class TestTestDefinitionValidation:
         td = TestDefinition(name="t", module="my.module", function="my_func")
         assert td.module == "my.module"
 
+    def test_function_without_module_valid(self) -> None:
+        td = TestDefinition(name="t", function="my_func")
+
+        assert td.module is None
+        assert td.function == "my_func"
+
     def test_both_raises(self) -> None:
         with pytest.raises(ValidationError):
             TestDefinition(name="t", code="def f(): pass", module="m", function="f")

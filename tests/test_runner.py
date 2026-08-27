@@ -272,6 +272,37 @@ def test_raises(add):
 # External module loading
 # ---------------------------------------------------------------------------
 
+
+class TestGlobalFunctionLoading:
+    def test_function_without_module_resolves_from_namespace(self) -> None:
+        def check_add(add) -> bool:
+            return add(2, 3) == 5
+
+        td = TestDefinition(name="global", function="check_add")
+        namespace = {"check_add": check_add, "add": lambda a, b: a + b}
+
+        results = make_runner().run(make_exercise([td]), namespace)
+
+        assert results[0].passed is True
+
+    def test_missing_global_function_fails_gracefully(self) -> None:
+        td = TestDefinition(name="global", function="check_add")
+
+        results = make_runner().run(make_exercise([td]), {})
+
+        assert results[0].passed is False
+        assert "check_add" in (results[0].message or "")
+        assert "current global scope" in (results[0].message or "")
+
+    def test_non_callable_global_function_fails_gracefully(self) -> None:
+        td = TestDefinition(name="global", function="check_add")
+
+        results = make_runner().run(make_exercise([td]), {"check_add": 42})
+
+        assert results[0].passed is False
+        assert "check_add" in (results[0].message or "")
+
+
 class TestExternalModuleLoading:
     def test_module_import_failure_fails_gracefully(self) -> None:
         td = TestDefinition(name="t", module="nonexistent.module.xyz", function="fn")

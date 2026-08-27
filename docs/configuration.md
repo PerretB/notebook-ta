@@ -240,12 +240,13 @@ silently ignoring them.
 |-----|------|-------------|
 | `name` | string | Human-readable test name |
 | `code` | string | Inline Python function source |
-| `module` | string | Dotted module path for external test |
-| `function` | string | Function name within the external module |
+| `module` | string | Optional dotted module path containing the test function |
+| `function` | string | Function name in `module`, or in the current global scope when `module` is omitted |
 | `student_symbols` | list of strings | Symbols placed in the `student_globals` dictionary passed to the test. Omit when using named parameters. |
 | `export_student_globals` | boolean | Export the full notebook namespace as `student_globals`. Defaults to `false`; use only when a selected symbol list cannot work. |
 
-Exactly one of `code` or (`module` + `function`) must be specified.
+Specify either `code` or `function`. Add `module` to load the named function from an importable
+module; without `module`, the function is resolved from the current global scope.
 `student_symbols` and `export_student_globals` are mutually exclusive.
 
 ---

@@ -197,19 +197,17 @@ class TestDefinition(_StrictConfigModel):
 
     @model_validator(mode="after")
     def validate_source(self) -> TestDefinition:
+        """Require inline code or a function, with an optional external module."""
         has_inline = self.code is not None
-        has_external = self.module is not None or self.function is not None
-        if has_inline and has_external:
+        if has_inline and (self.module is not None or self.function is not None):
             raise ValueError(
-                "TestDefinition must specify either 'code' or ('module' + 'function'), not both."
+                "TestDefinition must specify either 'code' or 'function' (optionally with "
+                "'module'), not both."
             )
-        if not has_inline and not has_external:
+        if not has_inline and self.function is None:
             raise ValueError(
-                "TestDefinition must specify either 'code' or ('module' + 'function')."
-            )
-        if has_external and (self.module is None or self.function is None):
-            raise ValueError(
-                "TestDefinition with external source must specify both 'module' and 'function'."
+                "TestDefinition must specify either 'code' or 'function' (optionally with "
+                "'module')."
             )
         if self.student_symbols is not None and self.export_student_globals:
             raise ValueError(
