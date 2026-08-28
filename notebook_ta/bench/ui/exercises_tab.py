@@ -39,7 +39,7 @@ def build(
             for exercise_id, config in state.exercise_registry.items():
                 expansion = ui.expansion(
                     config.name or exercise_id,
-                    caption=exercise_id if config.name else None,
+                    caption=exercise_id if config.name != exercise_id else None,
                     value=True,
                 ).classes("w-full")
                 with expansion:
@@ -61,7 +61,7 @@ def build(
 
                     ui.input(
                         "Exercise name",
-                        value=config.name or "",
+                        value=config.name if config.name != exercise_id else "",
                         on_change=_on_exercise_name_change,
                     ).props("debounce=500").classes("w-full max-w-xl")
                     if config.answer_type == "python":

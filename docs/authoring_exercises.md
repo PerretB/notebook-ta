@@ -10,13 +10,13 @@ Each exercise is defined in `exercises.toml` under `[exercises.<id>]`:
 
 ```toml
 [exercises.ex1]
-name = "Add two numbers"
 statement = "Write a function `add(a, b)` that returns the sum of two numbers."
 additional_info = "No imports are needed."
 ```
 
 The `id` (here `ex1`) is the stable identifier used in the `%%notebook_ta` cell magic line.
-The optional `name` is an editable display name used by the benchmarking interface; changing it
+The optional `name` is an editable display name used by the benchmarking interface. When omitted,
+it defaults to the subsection ID (`ex1` here). Changing it
 does not break saved solutions or historical benchmark records.
 
 `statement` is optional — see [Embedding statements in the notebook](#embedding-statements-in-the-notebook) for an alternative that avoids duplicating the exercise description.
@@ -56,6 +56,8 @@ appropriate audit process.
 ## Writing Unit Tests
 
 Tests are declared as TOML array tables: `[[exercises.<id>.tests]]`.
+The optional `name` defaults to `Unit test 1`, `Unit test 2`, and so on, according to the test's
+position within the exercise. Numbering includes tests that have an explicit name.
 
 Exercise tests are trusted Python. Namespace separation and test timeouts are not a security
 sandbox; see the [trust and security model](security.md) before running third-party material.

@@ -216,6 +216,7 @@ Each exercise is declared under `[exercises.<id>]`.
 
 | Key | Type | Required | Description |
 |-----|------|----------|-------------|
+| `name` | string | optional | Display name. Defaults to the `<id>` from `[exercises.<id>]`. |
 | `statement` | string | ❌ | Exercise description passed to the LLM. May be omitted if the statement is embedded in the notebook (see [Embedding statements in the notebook](authoring_exercises.md#embedding-statements-in-the-notebook)) |
 | `answer_type` | `"python"` or `"free_text"` | ❌ | Submission behavior; defaults to `"python"` |
 | `additional_info` | string | ❌ | Any other context for the LLM |
@@ -238,7 +239,7 @@ silently ignoring them.
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `name` | string | Human-readable test name |
+| `name` | string | Optional human-readable test name. Defaults to `Unit test 1`, `Unit test 2`, and so on in configured order. |
 | `code` | string | Inline Python function source |
 | `module` | string | Optional dotted module path containing the test function |
 | `function` | string | Function name in `module`, or in the current global scope when `module` is omitted |

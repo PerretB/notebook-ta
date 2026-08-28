@@ -168,7 +168,7 @@ class BenchAppState:
             raise ConfigurationError(f"Exercise {normalized_id!r} already exists.")
         exercise = ExerciseConfig(
             id=normalized_id,
-            name=name.strip() or None,
+            name=name.strip() or normalized_id,
             statement=statement.strip() or None,
             answer_type=answer_type,
             evaluation_criteria=evaluation_criteria.strip() or None,
@@ -183,7 +183,7 @@ class BenchAppState:
         exercise = self.exercise_registry[exercise_id]
         normalized_name = name.strip()
         set_exercise_name(self._editable_catalog_path(), exercise_id, normalized_name)
-        exercise.name = normalized_name or None
+        exercise.name = normalized_name or exercise.id
 
     def update_exercise_setup_code(self, exercise_id: str, setup_code: str) -> None:
         """Update benchmark-only setup code for an exercise in the project file."""
