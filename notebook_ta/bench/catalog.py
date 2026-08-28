@@ -19,7 +19,10 @@ def set_exercise_name(path: str | Path, exercise_id: str, name: str) -> None:
     exercise = exercises.get(exercise_id)
     if not isinstance(exercise, Table):
         raise ConfigurationError(f"Exercise {exercise_id!r} does not exist in {catalog_path}.")
-    exercise["name"] = name
+    if name:
+        exercise["name"] = name
+    elif "name" in exercise:
+        del exercise["name"]
     _write_document(catalog_path, document.as_string())
 
 
@@ -32,7 +35,7 @@ def add_exercise(path: str | Path, exercise: ExerciseConfig) -> None:
     item = tomlkit.table()
     if exercise.answer_type != "python":
         item.add("answer_type", exercise.answer_type)
-    if exercise.name:
+    if exercise.name != exercise.id:
         item.add("name", exercise.name)
     if exercise.statement:
         item.add("statement", exercise.statement)

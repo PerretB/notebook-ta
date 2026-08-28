@@ -167,7 +167,7 @@ Exactly one of `code` or (`module` + `function`) is required when this optional 
 
 | Field      | Type          | Description                                               |
 |------------|---------------|-----------------------------------------------------------|
-| `name`     | `str`         | Human-readable test name                                  |
+| `name`     | `str`         | Human-readable test name; omitted TOML values default to `Unit test <position>` |
 | `code`     | `str \| None` | Inline Python function source (multiline string)          |
 | `module`   | `str \| None` | Optional dotted module path for an external test function |
 | `function` | `str \| None` | Function name in the module or current global scope       |
@@ -184,6 +184,7 @@ The two namespace export fields are mutually exclusive.
 | Field              | Type                    | Description                                           |
 |--------------------|-------------------------|-------------------------------------------------------|
 | `id`               | `str`                   | Unique exercise identifier (used in cell magic)       |
+| `name`             | `str`                   | Display name; omitted TOML values default to `id`      |
 | `answer_type`      | `Literal["python", "free_text"]` | Submission behavior; defaults to `"python"` |
 | `statement`        | `str`                   | Exercise description passed to the LLM                |
 | `expected_output`  | `str \| None`           | Example expected output                               |

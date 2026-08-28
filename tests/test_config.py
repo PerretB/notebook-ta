@@ -333,6 +333,44 @@ class TestLoadExercises:
         assert ex2.tests[0].module == "some.module"
         assert ex2.tests[0].function == "test_multiply"
 
+    def test_omitted_exercise_name_defaults_to_table_id(self, tmp_path: Path) -> None:
+        path = tmp_path / "default-exercise-name.toml"
+        path.write_text('[exercises.quick_sort]\nstatement = "Sort values."\n', encoding="utf-8")
+
+        exercise = load_exercises(path)[0]
+
+        assert exercise.name == "quick_sort"
+
+    def test_omitted_test_names_are_numbered_in_configuration_order(
+        self, tmp_path: Path
+    ) -> None:
+        path = tmp_path / "default-test-names.toml"
+        path.write_text(
+            textwrap.dedent("""\
+                [exercises.sort]
+                statement = "Sort values."
+
+                [[exercises.sort.tests]]
+                code = "def first(): return True"
+
+                [[exercises.sort.tests]]
+                name = "Explicit name"
+                code = "def second(): return True"
+
+                [[exercises.sort.tests]]
+                code = "def third(): return True"
+            """),
+            encoding="utf-8",
+        )
+
+        exercise = load_exercises(path)[0]
+
+        assert [test.name for test in exercise.tests] == [
+            "Unit test 1",
+            "Explicit name",
+            "Unit test 3",
+        ]
+
     def test_free_text_exercise_loads(self, tmp_path: Path) -> None:
         content = textwrap.dedent("""\
             [exercises.explain]

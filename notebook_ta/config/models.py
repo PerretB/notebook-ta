@@ -222,7 +222,7 @@ class ExerciseConfig(_StrictConfigModel):
 
     id: NonEmptyString
     answer_type: Literal["python", "free_text"] = "python"
-    name: NonEmptyString | None = None
+    name: NonEmptyString
     statement: str | None = None
     additional_info: str | None = None
     evaluation_criteria: str | None = None
@@ -233,6 +233,30 @@ class ExerciseConfig(_StrictConfigModel):
     max_student_answer_length: int | None = Field(default=None, gt=0)
     max_unit_test_output_length: int | None = Field(default=None, gt=0)
     tests: list[TestDefinition] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_default_names(cls, data: object) -> object:
+        """Derive omitted exercise and unit-test names from their surrounding context."""
+        if not isinstance(data, Mapping):
+            return data
+
+        resolved = dict(data)
+        exercise_id = resolved.get("id")
+        if "name" not in resolved and isinstance(exercise_id, str):
+            resolved["name"] = exercise_id
+
+        tests = resolved.get("tests")
+        if isinstance(tests, list):
+            resolved_tests: list[object] = []
+            for index, test in enumerate(tests, start=1):
+                if isinstance(test, Mapping) and "name" not in test:
+                    resolved_tests.append({**test, "name": f"Unit test {index}"})
+                else:
+                    resolved_tests.append(test)
+            resolved["tests"] = resolved_tests
+
+        return resolved
 
     @model_validator(mode="after")
     def validate_answer_type_settings(self) -> ExerciseConfig:

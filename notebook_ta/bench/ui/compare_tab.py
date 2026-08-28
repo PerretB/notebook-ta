@@ -158,7 +158,7 @@ def build(state: BenchAppState) -> Callable[[], object]:
             for config, solutions in exercise_rows:
                 with ui.expansion(
                     config.name or config.id,
-                    caption=config.id if config.name else None,
+                    caption=config.id if config.name != config.id else None,
                     value=True,
                 ).classes("w-full"):
                     _render_exercise_matrix(

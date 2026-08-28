@@ -48,6 +48,18 @@ def test_remote_catalog_is_read_only() -> None:
         set_exercise_name("https://example.test/exercises.toml", "ex1", "Name")
 
 
+def test_clearing_name_removes_field_and_restores_id_default(tmp_path: Path) -> None:
+    """An empty edited name should restore the subsection-derived default."""
+    path = tmp_path / "exercises.toml"
+    _write_catalog(path)
+    set_exercise_name(path, "ex1", "Custom name")
+
+    set_exercise_name(path, "ex1", "")
+
+    assert "name =" not in path.read_text(encoding="utf-8")
+    assert load_exercises(path)[0].name == "ex1"
+
+
 def test_add_free_text_exercise_persists_answer_fields(tmp_path: Path) -> None:
     path = tmp_path / "exercises.toml"
     _write_catalog(path)
