@@ -11,12 +11,15 @@ from IPython import display as ipydisplay
 from notebook_ta.i18n import set_language, translate
 from notebook_ta.notebook.display import (
     _BACKGROUND_TASKS,
+    LLMOutput,
+    clear_cell_output,
     display_busy_message,
     display_hints_button,
     display_initialization,
     display_ollama_setup,
     display_test_results,
     format_llm_answer_markdown,
+    format_llm_queued_markdown,
     format_llm_waiting_markdown,
     set_hint_buttons_busy,
 )
@@ -67,10 +70,24 @@ def test_format_llm_answer_markdown_wraps_answer() -> None:
     """LLM answers should be visually separated from the original notebook content."""
     rendered = format_llm_answer_markdown("Nice work.")
 
-    assert rendered.startswith('<div style="background: rgba(20, 184, 166, 0.14);')
+    assert rendered.startswith(
+        '<div class="notebook-ta-llm-answer" style="background: rgba(20, 184, 166, 0.14);'
+    )
     assert "color: inherit" in rendered
+    assert "box-sizing: border-box" in rendered
+    assert "max-width: 100%" in rendered
+    assert "overflow-wrap: anywhere" in rendered
+    assert "word-break: break-word" in rendered
     assert f"{translate('display_llm_answer_prefix')}: Nice work." in rendered
     assert rendered.endswith("</div>")
+
+
+def test_clear_cell_output_clears_immediately() -> None:
+    """Repeated execution should remove every output from the previous cell run."""
+    with patch("notebook_ta.notebook.display.ipydisplay.clear_output") as clear_mock:
+        clear_cell_output()
+
+    clear_mock.assert_called_once_with(wait=False)
 
 
 def test_format_llm_waiting_markdown_contains_animated_spinner() -> None:
@@ -80,6 +97,96 @@ def test_format_llm_waiting_markdown_contains_animated_spinner() -> None:
     assert "notebook-ta-spinner" in rendered
     assert "@keyframes notebook-ta-spin" in rendered
     assert 'role="status"' in rendered
+
+
+def test_llm_output_starts_queued_and_updates_in_place() -> None:
+    """A queued request must reserve a stable display in its submitting cell."""
+    with patch("notebook_ta.notebook.display.ipydisplay.display") as display_mock:
+        output = LLMOutput()
+
+    style = display_mock.call_args_list[0].args[0]
+    panel = display_mock.call_args_list[1].args[0]
+    content, controls = panel.children
+    initial = content.outputs[0]["data"]["text/markdown"]
+    assert isinstance(style, ipydisplay.HTML)
+    assert "notebook-ta-llm-controls" in style.data
+    assert "position: absolute" in style.data
+    assert "top: 1.05em" in style.data
+    assert "right: 2em" in style.data
+    assert "max-width: 100% !important" in style.data
+    assert "min-width: 0 !important" in style.data
+    assert "background: transparent" in style.data
+    assert "background-color: transparent" in style.data
+    assert ".jp-OutputArea-output:has(.notebook-ta-llm-panel)" in style.data
+    assert ".output_area:has(.notebook-ta-llm-panel)" in style.data
+    assert (
+        ".cell-output-ipywidget-background:has(.notebook-ta-llm-panel)"
+        in style.data
+    )
+    assert "--jp-widgets-color: var(--vscode-editor-foreground, inherit)" in style.data
+    assert "--vscode-editor-foreground" in style.data
+    assert "var(--jp-ui-font-color1, inherit)" in style.data
+    assert "opacity: 1" in style.data
+    assert ":root" not in style.data
+    assert 'content: "\\25A0"' in style.data
+    assert 'content: "\\25A0\\A\\25A0"' in style.data
+    assert translate("display_llm_queued") in initial
+    assert format_llm_queued_markdown() == initial
+    assert display_mock.call_count == 2
+    assert "notebook-ta-llm-panel" in panel._dom_classes
+    assert "notebook-ta-llm-controls" in controls._dom_classes
+
+    output.show_waiting()
+    waiting = content.outputs[0]["data"]["text/markdown"]
+    assert "notebook-ta-spinner" in waiting
+
+
+def test_llm_output_exposes_individual_and_global_cancel_controls() -> None:
+    """Both requested cancellation actions should remain local to the response panel."""
+    cancel_calls = 0
+    cancel_all_calls = 0
+
+    def cancel() -> None:
+        nonlocal cancel_calls
+        cancel_calls += 1
+
+    def cancel_all() -> None:
+        nonlocal cancel_all_calls
+        cancel_all_calls += 1
+
+    with patch("notebook_ta.notebook.display.ipydisplay.display") as display_mock:
+        output = LLMOutput()
+    output.bind_cancellation(cancel, cancel_all)
+    panel = display_mock.call_args_list[1].args[0]
+    controls = panel.children[1]
+    cancel_button, cancel_all_button = controls.children
+
+    cancel_button.click()
+    cancel_all_button.click()
+
+    assert cancel_calls == 1
+    assert cancel_all_calls == 1
+    assert "notebook-ta-llm-cancel" in cancel_button._dom_classes
+    assert "notebook-ta-llm-cancel-all" in cancel_all_button._dom_classes
+    assert cancel_button.tooltip == translate("display_llm_cancel_tooltip")
+    assert cancel_all_button.tooltip == translate("display_llm_cancel_all_tooltip")
+
+
+def test_llm_output_cancellation_preserves_partial_answer_and_hides_controls() -> None:
+    """Cancelling a stream should clearly label and retain its accumulated feedback."""
+    with patch("notebook_ta.notebook.display.ipydisplay.display") as display_mock:
+        output = LLMOutput()
+    panel = display_mock.call_args_list[1].args[0]
+    content, controls = panel.children
+
+    output.show_answer("Partial feedback")
+    output.show_cancelled()
+
+    rendered = content.outputs[0]["data"]["text/markdown"]
+    assert translate("display_llm_cancelled_partial") in rendered
+    assert "Partial feedback" in rendered
+    assert controls.layout.display == "none"
+    assert all(button.disabled for button in controls.children)
 
 
 def test_display_busy_message_renders_retry_guidance() -> None:

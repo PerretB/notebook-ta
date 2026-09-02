@@ -16,6 +16,14 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "debug_prompt_title": "Debug - LLM Prompt ({call_type})",
         "display_llm_thinking_prefix": "Thinking",
         "display_llm_final_answer_prefix": "Final answer",
+        "display_llm_queued": "Queued for LLM feedback...",
+        "display_llm_cancel": "Cancel",
+        "display_llm_cancel_all": "Cancel all",
+        "display_llm_cancel_tooltip": "Cancel this LLM request",
+        "display_llm_cancel_all_tooltip": "Cancel all queued and active LLM requests",
+        "display_llm_cancelled": "**LLM feedback cancelled before starting.**",
+        "display_llm_cancelled_partial": "**LLM feedback cancelled. Partial response:**",
+        "display_llm_failed": "**LLM feedback failed.** {detail}",
         "display_busy": (
             "**notebook-ta is already working.**\n\n"
             "Please wait for the current notebook-ta cell or hint request to finish, "
@@ -26,7 +34,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "display_hints_busy_button": "Computing... please wait",
         "display_hints_button": "Give me hints",
-        "display_hints_fetching": "Fetching hints...",
+        "display_hints_fetching": "Hints queued...",
         "display_execution_failure_heading": "Code execution failed",
         "display_execution_failure_detail": (
             "Tests and LLM analysis were not run. Fix the error and run the cell again."
@@ -34,7 +42,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "display_hints_tooltip": "Ask the LLM for targeted hints",
         "display_llm_answer_prefix": "🤖",
         "display_llm_unavailable_heading": "LLM unavailable",
-        "display_success": "**✅ All tests passed!** Generating analysis...",
+        "display_success": "**✅ All tests passed!** LLM analysis queued.",
         "display_test_results_heading": "Test Results",
         "magic_student_answer_too_long": (
             "Student answer length ({answer_length} characters) exceeds the configured "
@@ -131,6 +139,14 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "debug_prompt_title": "Debogage - Invite LLM ({call_type})",
         "display_llm_thinking_prefix": "Raisonnement",
         "display_llm_final_answer_prefix": "Reponse finale",
+        "display_llm_queued": "En attente d'analyse par le LLM...",
+        "display_llm_cancel": "Annuler",
+        "display_llm_cancel_all": "Tout annuler",
+        "display_llm_cancel_tooltip": "Annuler cette requête LLM",
+        "display_llm_cancel_all_tooltip": "Annuler toutes les requêtes LLM en cours et en attente",
+        "display_llm_cancelled": "**Retour LLM annulé avant son démarrage.**",
+        "display_llm_cancelled_partial": "**Retour LLM annulé. Réponse partielle :**",
+        "display_llm_failed": "**Échec du retour LLM.** {detail}",
         "display_busy": (
             "**notebook-ta est déjà en cours d'exécution:** Réessayez lorsque la requête en cours sera terminée."
         ),
@@ -139,7 +155,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         ),
         "display_hints_busy_button": "Requête en cours, patientez...",
         "display_hints_button": "Donnez-moi un indice",
-        "display_hints_fetching": "Recherche des indices...",
+        "display_hints_fetching": "Indices en attente...",
         "display_execution_failure_heading": "Échec de l'exécution du code",
         "display_execution_failure_detail": (
             "Les tests et l'analyse LLM n'ont pas été lancés. "
@@ -148,7 +164,7 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "display_hints_tooltip": "Demander des indices.",
         "display_llm_answer_prefix": "🤖",
         "display_llm_unavailable_heading": "LLM indisponible",
-        "display_success": "**✅ Tous les tests ont réussi !** Génération de l'analyse...",
+        "display_success": "**✅ Tous les tests ont réussi !** Analyse LLM en attente.",
         "display_test_results_heading": "Résultats des tests",
         "magic_student_answer_too_long": (
             "La longueur de la réponse de l'étudiant ({answer_length} caractères) "

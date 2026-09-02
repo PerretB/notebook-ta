@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
+import pytest
 from IPython.core.interactiveshell import InteractiveShell
 
 from notebook_ta.config.models import ExerciseConfig, GlobalConfig, LLMConfig, PromptConfig
@@ -103,9 +104,38 @@ class TestMagicRegistration:
         registry = ExerciseRegistry()
         llm = MagicMock()
         session = SessionState()
-        with patch("notebook_ta.notebook.magic.NotebookTAMagic") as MockMagic:
+        with (
+            patch("notebook_ta.notebook.magic.NotebookTAMagic") as MockMagic,
+            patch("notebook_ta.notebook.magic._active_magic_instance", None),
+        ):
             load_ipython_extension(ip, registry=registry, llm_provider=llm, session=session)
         ip.register_magics.assert_called_once_with(MockMagic.return_value)
+
+    def test_reload_shuts_down_previously_registered_magic(self) -> None:
+        """Rerunning a setup cell must not leave the previous dispatcher alive."""
+        ip = MagicMock()
+        registry = ExerciseRegistry()
+        llm = MagicMock()
+        session = SessionState()
+        first_magic = MagicMock()
+        second_magic = MagicMock()
+
+        with (
+            patch(
+                "notebook_ta.notebook.magic.NotebookTAMagic",
+                side_effect=[first_magic, second_magic],
+            ),
+            patch("notebook_ta.notebook.magic._active_magic_instance", None),
+        ):
+            load_ipython_extension(ip, registry=registry, llm_provider=llm, session=session)
+            load_ipython_extension(ip, registry=registry, llm_provider=llm, session=session)
+
+        first_magic.shutdown_now.assert_called_once_with()
+        second_magic.shutdown_now.assert_not_called()
+        assert ip.register_magics.call_args_list == [
+            call(first_magic),
+            call(second_magic),
+        ]
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +143,26 @@ class TestMagicRegistration:
 # ---------------------------------------------------------------------------
 
 class TestCellMagicAllPass:
+    @patch("notebook_ta.notebook.magic.display")
+    def test_repeated_execution_explicitly_clears_previous_cell_output(
+        self,
+        mock_display: MagicMock,
+    ) -> None:
+        """Every invocation clears saved results instead of relying on frontend behavior."""
+        ip = make_ip_stub()
+        magic = make_magic(ip=ip, llm_available=False)
+
+        with patch.object(
+            magic._runner,
+            "run",
+            return_value=[TestResult("t", True)],
+        ):
+            magic.notebook_ta("ex1", "answer = 1")
+            magic.notebook_ta("ex1", "answer = 2")
+
+        assert mock_display.clear_cell_output.call_count == 2
+        assert ip.run_cell.call_count == 2
+
     @patch("notebook_ta.notebook.magic._log")
     @patch("notebook_ta.notebook.magic.display")
     def test_oversized_answer_runs_tests_but_skips_llm(
@@ -351,7 +401,9 @@ class TestLLMUnavailable:
         finally:
             loop.close()
 
-        mock_display.display_no_llm_message.assert_called_once_with("LLM unavailable.")
+        mock_display.LLMOutput.return_value.show_unavailable.assert_called_once_with(
+            "LLM unavailable."
+        )
 
     @patch("notebook_ta.notebook.magic.stream_to_output", new_callable=AsyncMock)
     @patch("notebook_ta.notebook.magic.display")
@@ -369,8 +421,113 @@ class TestLLMUnavailable:
         finally:
             loop.close()
 
-        mock_display.display_no_llm_message.assert_called_once_with("LLM unavailable.")
+        mock_display.LLMOutput.return_value.show_unavailable.assert_called_once_with(
+            "LLM unavailable."
+        )
         assert magic._session.get_history("ex1", 3) == []
+
+
+# ---------------------------------------------------------------------------
+# Serial LLM queue
+# ---------------------------------------------------------------------------
+
+
+class TestSerialLLMQueue:
+    @patch("notebook_ta.notebook.magic.display")
+    async def test_run_all_runs_each_test_suite_before_serial_analysis(
+        self,
+        mock_display: MagicMock,
+    ) -> None:
+        """Later notebook cells run and test while the first LLM stream is active."""
+        ip = make_ip_stub()
+        magic = make_magic(
+            ip=ip,
+            exercises=[make_exercise("ex1"), make_exercise("ex2")],
+        )
+        first_stream_started = asyncio.Event()
+        release_first_stream = asyncio.Event()
+        started_prompts: list[str] = []
+
+        async def _stream(prompt: str):
+            started_prompts.append(prompt)
+            if len(started_prompts) == 1:
+                first_stream_started.set()
+                await release_first_stream.wait()
+            yield "feedback"
+
+        magic._llm.stream = _stream
+        passing_results = [TestResult("t", True)]
+
+        with patch.object(magic._runner, "run", return_value=passing_results) as run_tests:
+            magic.notebook_ta("ex1", "first_answer = 1")
+            await first_stream_started.wait()
+
+            magic.notebook_ta("ex2", "second_answer = 2")
+
+            assert ip.run_cell.call_count == 2
+            assert run_tests.call_count == 2
+            assert len(started_prompts) == 1
+            assert mock_display.LLMOutput.call_count == 2
+
+            release_first_stream.set()
+            worker = magic._dispatcher._worker_task
+            assert worker is not None
+            await worker
+
+        assert len(started_prompts) == 2
+        mock_display.display_busy_message.assert_not_called()
+
+
+class TestLLMCancellation:
+    @patch("notebook_ta.notebook.magic.display")
+    async def test_cancelled_hint_is_not_saved_to_history(
+        self,
+        mock_display: MagicMock,
+    ) -> None:
+        """Cancelling a queued hint must not record a partial exchange."""
+        magic = make_magic()
+        stream_started = asyncio.Event()
+
+        async def _stream_to_output(_stream: object, **_kwargs: object) -> str:
+            stream_started.set()
+            await asyncio.Event().wait()
+            return "unreachable"
+
+        with patch(
+            "notebook_ta.notebook.magic.stream_to_output",
+            side_effect=_stream_to_output,
+        ):
+            result = magic._hint_callback(
+                "ex1",
+                "student code",
+                [TestResult("fails", False)],
+            )
+            assert isinstance(result, asyncio.Future)
+            await stream_started.wait()
+
+            assert magic._dispatcher.cancel_all() == 1
+            with pytest.raises(asyncio.CancelledError):
+                await result
+
+        assert magic._session.get_history("ex1", 3) == []
+        mock_display.LLMOutput.return_value.show_cancelled.assert_called_once_with()
+
+    @patch("notebook_ta.notebook.magic.display")
+    def test_interrupted_tests_do_not_enqueue_analysis(self, mock_display: MagicMock) -> None:
+        """A foreground interruption must propagate before any background job exists."""
+        magic = make_magic()
+
+        with (
+            patch.object(magic._runner, "run", side_effect=KeyboardInterrupt),
+            patch.object(magic, "_trigger_llm") as trigger_llm,
+            pytest.raises(KeyboardInterrupt),
+        ):
+            magic.notebook_ta("ex1", "answer = 1")
+
+        trigger_llm.assert_not_called()
+        assert magic._dispatcher.pending_count == 0
+        assert magic._dispatcher.is_active is False
+        mock_display.LLMOutput.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -379,7 +536,7 @@ class TestLLMUnavailable:
 
 class TestHintHistory:
     @patch("notebook_ta.notebook.magic.display")
-    def test_cell_execution_toggles_hint_buttons_busy(self, mock_display) -> None:
+    def test_cell_execution_does_not_toggle_all_hint_buttons(self, mock_display) -> None:
         ip = make_ip_stub()
         magic = make_magic(ip=ip)
         failing_results = [TestResult("t", False)]
@@ -389,11 +546,10 @@ class TestHintHistory:
 
         ip.run_cell.assert_called_once_with("def add(a,b): return 0")
         mock_display.display_test_results.assert_called_once_with(failing_results)
-        mock_display.set_hint_buttons_busy.assert_any_call(True)
-        mock_display.set_hint_buttons_busy.assert_any_call(False)
+        mock_display.set_hint_buttons_busy.assert_not_called()
 
     @patch("notebook_ta.notebook.magic.display")
-    def test_cell_execution_restores_hint_buttons_when_tests_raise(self, mock_display) -> None:
+    def test_test_exception_does_not_toggle_all_hint_buttons(self, mock_display) -> None:
         ip = make_ip_stub()
         magic = make_magic(ip=ip)
 
@@ -403,8 +559,7 @@ class TestHintHistory:
             except RuntimeError as exc:
                 assert str(exc) == "boom"
 
-        mock_display.set_hint_buttons_busy.assert_any_call(True)
-        mock_display.set_hint_buttons_busy.assert_any_call(False)
+        mock_display.set_hint_buttons_busy.assert_not_called()
 
     def test_hint_appended_to_session(self) -> None:
         ip = make_ip_stub()
@@ -442,7 +597,7 @@ class TestHintHistory:
         stream_started = asyncio.Event()
         release_stream = asyncio.Event()
 
-        async def _stream_to_output(_stream: object) -> str:
+        async def _stream_to_output(_stream: object, **_kwargs: object) -> str:
             stream_started.set()
             await release_stream.wait()
             return "Hint response"
@@ -452,30 +607,35 @@ class TestHintHistory:
             assert isinstance(result, Awaitable)
 
             await stream_started.wait()
-            task = cast(asyncio.Task[bool | None], result)
-            assert task in magic._background_tasks
+            future = cast(asyncio.Future[bool | None], result)
+            assert magic._dispatcher.is_active is True
 
             release_stream.set()
-            assert await task is True
+            assert await future is True
 
-        assert task not in magic._background_tasks
+        assert magic._dispatcher.is_active is False
 
     @patch("notebook_ta.notebook.magic.display")
-    async def test_running_hint_rejects_overlapping_cell_and_hint_requests(
+    async def test_running_hint_queues_overlapping_cell_and_hint_requests(
         self,
         mock_display: MagicMock,
     ) -> None:
-        """An active hint must retain exclusive ownership until its stream finishes."""
+        """An active hint must not prevent later cells from running tests and queueing work."""
         ip = make_ip_stub()
         magic = make_magic(ip=ip)
         failing_results = [TestResult("t", False)]
         stream_started = asyncio.Event()
         release_stream = asyncio.Event()
 
-        async def _stream_to_output(_stream: object) -> str:
-            stream_started.set()
-            await release_stream.wait()
-            return "Hint response"
+        stream_calls = 0
+
+        async def _stream_to_output(_stream: object, **_kwargs: object) -> str:
+            nonlocal stream_calls
+            stream_calls += 1
+            if stream_calls == 1:
+                stream_started.set()
+                await release_stream.wait()
+            return f"Hint response {stream_calls}"
 
         with patch(
             "notebook_ta.notebook.magic.stream_to_output",
@@ -485,25 +645,22 @@ class TestHintHistory:
             assert isinstance(first_hint, Awaitable)
             await stream_started.wait()
 
-            magic.notebook_ta("ex1", "def add(a,b): return 0")
+            with patch.object(magic._runner, "run", return_value=failing_results) as run_tests:
+                magic.notebook_ta("ex1", "def add(a,b): return 0")
             second_hint = magic._hint_callback("ex1", "student code", failing_results)
 
-            assert second_hint is False
-            assert ip.run_cell.call_count == 0
-            mock_display.display_busy_message.assert_called_once_with()
-            assert mock_display.set_hint_buttons_busy.call_args_list == [
-                call(True)
-            ]
+            assert isinstance(second_hint, Awaitable)
+            assert ip.run_cell.call_count == 1
+            run_tests.assert_called_once()
             assert mock_stream.call_count == 1
 
             release_stream.set()
             assert await cast(Awaitable[bool], first_hint) is True
-            await asyncio.sleep(0)
+            assert await cast(Awaitable[bool], second_hint) is True
 
-        assert mock_display.set_hint_buttons_busy.call_args_list == [
-            call(True),
-            call(False),
-        ]
+        assert mock_stream.call_count == 2
+        mock_display.display_busy_message.assert_not_called()
+        mock_display.set_hint_buttons_busy.assert_not_called()
 
     def test_hint_deque_truncates_at_limit(self) -> None:
         session = SessionState(hint_history_length=2)
@@ -532,7 +689,7 @@ class TestAnswerPostprocessor:
         results = [TestResult("passes", True)]
 
         async def render_with_postprocessor(
-            stream: object, *, postprocessor: object = None
+            stream: object, *, postprocessor: object = None, **_kwargs: object
         ) -> str:
             accumulated = ""
             assert callable(postprocessor)
@@ -569,7 +726,7 @@ class TestAnswerPostprocessor:
         results = [TestResult("fails", False)]
 
         async def render_with_postprocessor(
-            stream: object, *, postprocessor: object = None
+            stream: object, *, postprocessor: object = None, **_kwargs: object
         ) -> str:
             accumulated = ""
             assert callable(postprocessor)

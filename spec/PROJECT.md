@@ -8,6 +8,15 @@ Notebook_ta is a teaching assistant for Python notebooks powered by a LLM. The s
 - The LLM analyzes the student's code and provides feedback following the instructions given in one or more general prompt which can be defined at the global level or at the exercise level. Global prompt fragments are reusable from success, failure, safety, no-LLM, and exercise-level prompt templates through validated `{{ fragment_name }}` references.
 - Each exercise also provides mandatory and optional information to the LLM to help it provide more accurate feedback. The mandatory information is composed of the exercise statements. Optional information can include the expected output, the expected time complexity, and other relevant details.
 - Each exercise can also provide unit tests to validate the student's code. If the tests succeed, the LLM should be triggered automatically to make a high level analysis of the proposed solution according to a specific prompt. If the tests fail, the system should propose to provide targeted feedback to help the student identify and correct their errors. The LLM can use these tests to provide more accurate feedback and hints. 
+- Notebook cell execution and unit tests are never skipped because another LLM request is active.
+  Analyses and requested hints share a serial FIFO queue: each request reserves a placeholder in
+  its originating cell, and one response at a time streams back there. Consequently, "Run All"
+  executes and tests all cells promptly while LLM feedback completes sequentially in the
+  background.
+- Every queued or active response provides controls to cancel that request or all outstanding LLM
+  work. Cancellation preserves a partial streamed response, never records a cancelled hint in
+  history, and releases the next queued request. Jupyter Stop remains a foreground-cell interrupt;
+  kernel restart discards all queued work and session hint history.
 - An exercise can instead accept a free-text answer. Its cell body is never executed and no unit
   tests run; the answer is sent directly to the LLM with optional evaluation criteria and a
   dedicated evaluation prompt. This feedback is formative and non-deterministic.

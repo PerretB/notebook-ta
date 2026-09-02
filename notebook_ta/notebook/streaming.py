@@ -10,6 +10,7 @@ from IPython import display as ipydisplay
 from notebook_ta.i18n import translate
 from notebook_ta.llm.base import LLMStreamChunk
 from notebook_ta.notebook.display import (
+    LLMOutput,
     format_llm_answer_markdown,
     format_llm_waiting_markdown,
 )
@@ -20,11 +21,12 @@ async def stream_to_output(
     *,
     postprocessor: Callable[[str, bool], Awaitable[str]] | None = None,
     show_thinking: bool = False,
+    output: LLMOutput | None = None,
 ) -> str:
     """Stream LLM chunks into a Markdown display updated in place.
 
-    1. An animated waiting indicator is displayed immediately with a stable
-       display ID.
+    1. A supplied queued output switches to its animated waiting state; otherwise an
+       animated waiting indicator is displayed immediately with a stable display ID.
     2. Incoming chunks are accumulated; on each chunk the display is updated
        in place via the display handle — no duplicate outputs.
     3. Returns the final displayed response once the stream ends.
@@ -34,6 +36,7 @@ async def stream_to_output(
         postprocessor: Optional asynchronous transformation applied to the accumulated
             answer after every chunk and once more when the answer is complete.
         show_thinking: Whether categorized thinking chunks should be rendered before the answer.
+        output: Optional display created in the submitting cell before the request was queued.
 
     Returns:
         The final processed response, or the raw concatenated response when no
@@ -43,10 +46,23 @@ async def stream_to_output(
     thinking: list[str] = []
     stream_completed = False
     rendered_answer = False
-    handle = cast(Any, ipydisplay.display)(
-        cast(Any, ipydisplay.Markdown)(format_llm_waiting_markdown()),
-        display_id=True,
-    )
+    if output is None:
+        handle = cast(Any, ipydisplay.display)(
+            cast(Any, ipydisplay.Markdown)(format_llm_waiting_markdown()),
+            display_id=True,
+        )
+    else:
+        output.show_waiting()
+        handle = None
+
+    def _update(answer: str) -> None:
+        """Update either the supplied cell-local output or a legacy display handle."""
+        if output is not None:
+            output.show_answer(answer)
+        elif handle is not None:
+            handle.update(
+                cast(Any, ipydisplay.Markdown)(format_llm_answer_markdown(answer))
+            )
 
     def _with_thinking(answer: str) -> str:
         """Prefix an answer with accumulated thinking when debug rendering is enabled."""
@@ -75,31 +91,17 @@ async def stream_to_output(
                 else full_text
             )
             displayed_text = _with_thinking(displayed_text)
-            if handle is not None:
-                handle.update(
-                    cast(Any, ipydisplay.Markdown)(
-                        format_llm_answer_markdown(displayed_text)
-                    )
-                )
-                rendered_answer = True
+            _update(displayed_text)
+            rendered_answer = True
         stream_completed = True
     finally:
-        if handle is not None and not stream_completed and not rendered_answer:
-            handle.update(cast(Any, ipydisplay.Markdown)(format_llm_answer_markdown("")))
+        if not stream_completed and not rendered_answer:
+            _update("")
 
     answer = "".join(accumulated)
     if postprocessor is not None:
         answer = await postprocessor(answer, True)
-        if handle is not None:
-            handle.update(
-                cast(Any, ipydisplay.Markdown)(
-                    format_llm_answer_markdown(_with_thinking(answer))
-                )
-            )
-    elif not accumulated and handle is not None:
-        handle.update(
-            cast(Any, ipydisplay.Markdown)(
-                format_llm_answer_markdown(_with_thinking(""))
-            )
-        )
+        _update(_with_thinking(answer))
+    elif not accumulated:
+        _update(_with_thinking(""))
     return answer
