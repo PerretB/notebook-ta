@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
-import inspect
-from collections.abc import Awaitable, Callable, Coroutine
-from typing import TYPE_CHECKING, Any, Literal, TypeVar, cast
+import atexit
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from IPython.core.magic import Magics, cell_magic, magics_class
 
@@ -14,6 +13,7 @@ from notebook_ta.i18n import translate
 from notebook_ta.llm.base import LLMProvider
 from notebook_ta.logging import get_logger
 from notebook_ta.notebook import display
+from notebook_ta.notebook.dispatcher import LLMDispatcher
 from notebook_ta.notebook.session import HintExchange, SessionState
 from notebook_ta.notebook.streaming import stream_to_output
 from notebook_ta.testing.runner import TestRunner
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from notebook_ta.testing.runner import TestResult
 
 _log = get_logger("magic")
-_T = TypeVar("_T")
+_active_magic_instance: NotebookTAMagic | None = None
 
 
 @magics_class
@@ -49,8 +49,8 @@ class NotebookTAMagic(Magics):
         self._answer_postprocessor = answer_postprocessor
         self._runner = TestRunner()
         self._debug = debug
-        self._background_tasks: set[asyncio.Task[Any]] = set()
-        self._operation_busy = False
+        self._dispatcher = LLMDispatcher()
+        atexit.register(self.shutdown_now)
 
     @cell_magic
     def notebook_ta(self, line: str, cell: str) -> None:
@@ -64,6 +64,7 @@ class NotebookTAMagic(Magics):
         exercise_id = line.strip()
         _log.debug("Cell magic invoked for exercise %r", exercise_id)
         assert self.shell is not None
+        display.clear_cell_output()
 
         # 1. Look up the exercise before executing any student code.
         try:
@@ -72,73 +73,58 @@ class NotebookTAMagic(Magics):
             display.display_unavailable_message(exercise_id)
             return
 
-        if not self._try_start_operation():
-            display.display_busy_message()
+        if exercise.answer_type == "free_text":
+            if not cell.strip():
+                _log.error(
+                    translate("magic_student_answer_empty", language=exercise.language)
+                )
+                return
+            self._trigger_llm(
+                exercise_id,
+                cell,
+                results=None,
+                hint_history=None,
+            )
             return
 
-        finish_deferred = False
-        try:
-            if exercise.answer_type == "free_text":
-                if not cell.strip():
-                    _log.error(
-                        translate("magic_student_answer_empty", language=exercise.language)
-                    )
-                    return
-                response = self._trigger_llm(
-                    exercise_id,
-                    cell,
-                    results=None,
-                    hint_history=None,
-                )
-                finish_deferred = self._finish_operation_after(response)
-                return
-
-            # 2. Execute the student's code in the user namespace.
-            execution_result = cast(Any, self.shell.run_cell)(cell)
-            execution_error = (
-                execution_result.error_before_exec or execution_result.error_in_exec
-            )
-            if execution_error is not None:
-                _log.debug(
-                    "Student code execution failed for %r: %s",
-                    exercise_id,
-                    execution_error,
-                )
-                display.display_execution_failure(execution_error)
-                return
-
-            # 3. Run unit tests
-            results = self._runner.run(exercise, self.shell.user_ns)
-            passed_count = sum(1 for r in results if r.passed)
+        # 2. Execute the student's code in the user namespace.
+        execution_result = cast(Any, self.shell.run_cell)(cell)
+        execution_error = execution_result.error_before_exec or execution_result.error_in_exec
+        if execution_error is not None:
             _log.debug(
-                "Tests complete for %r: %d/%d passed", exercise_id, passed_count, len(results)
+                "Student code execution failed for %r: %s",
+                exercise_id,
+                execution_error,
             )
+            display.display_execution_failure(execution_error)
+            return
 
-            if self._reject_oversized_answer(exercise_id, cell):
-                display.display_test_results(results)
-                return
+        # 3. Run tests before later notebook cells can mutate the user namespace.
+        results = self._runner.run(exercise, self.shell.user_ns)
+        passed_count = sum(1 for result in results if result.passed)
+        _log.debug(
+            "Tests complete for %r: %d/%d passed", exercise_id, passed_count, len(results)
+        )
 
-            # 4. Branch on pass/fail
-            all_passed = all(r.passed for r in results)
+        if self._reject_oversized_answer(exercise_id, cell):
+            display.display_test_results(results)
+            return
 
-            if all_passed:
-                display.display_success()
-                response = self._trigger_llm(
-                    exercise_id,
-                    cell,
-                    results,
-                    hint_history=None,
-                )
-                finish_deferred = self._finish_operation_after(response)
-            else:
-                display.display_test_results(results)
-                display.display_hints_button(
-                    exercise_id,
-                    callback=lambda eid: self._hint_callback(eid, cell, results),
-                )
-        finally:
-            if not finish_deferred:
-                self._finish_operation()
+        # 4. Render the test outcome, then queue any LLM work independently.
+        if all(result.passed for result in results):
+            display.display_success()
+            self._trigger_llm(
+                exercise_id,
+                cell,
+                results,
+                hint_history=None,
+            )
+        else:
+            display.display_test_results(results)
+            display.display_hints_button(
+                exercise_id,
+                callback=lambda eid: self._hint_callback(eid, cell, results),
+            )
 
     def _trigger_llm(
         self,
@@ -172,6 +158,8 @@ class NotebookTAMagic(Magics):
         if self._debug:
             display.display_debug_prompt(prompt, call_type="analysis")
 
+        output = display.LLMOutput()
+
         async def _run() -> str | None:
             try:
                 return await self._stream_answer(
@@ -181,13 +169,14 @@ class NotebookTAMagic(Magics):
                     student_code=student_code,
                     test_results=results,
                     hint_history=hint_history,
+                    output=output,
                 )
             except Exception as exc:
                 _log.warning("LLM stream failed for exercise %r: %s", exercise_id, exc)
-                display.display_no_llm_message(exercise._global.prompts.on_no_llm)
+                output.show_unavailable(exercise._global.prompts.on_no_llm)
                 return None
 
-        return self._schedule_coroutine(_run())
+        return self._dispatcher.enqueue(_run, output)
 
     def _hint_callback(
         self,
@@ -195,18 +184,8 @@ class NotebookTAMagic(Magics):
         student_code: str,
         test_results: list[TestResult],
     ) -> Awaitable[bool | None] | bool | None:
-        """Handle a hint button click: build hint prompt, stream, and save to history."""
-        if not self._try_start_operation():
-            return False
-
-        finish_deferred = False
-        try:
-            result = self._start_hint_request(exercise_id, student_code, test_results)
-            finish_deferred = self._finish_operation_after(result)
-            return result
-        finally:
-            if not finish_deferred:
-                self._finish_operation()
+        """Queue a hint request and save its response to history when complete."""
+        return self._start_hint_request(exercise_id, student_code, test_results)
 
     def _start_hint_request(
         self,
@@ -240,6 +219,8 @@ class NotebookTAMagic(Magics):
         if self._debug:
             display.display_debug_prompt(prompt, call_type="hint")
 
+        output = display.LLMOutput()
+
         async def _run() -> bool:
             try:
                 full_response = await self._stream_answer(
@@ -249,10 +230,11 @@ class NotebookTAMagic(Magics):
                     student_code=student_code,
                     test_results=test_results,
                     hint_history=hint_history,
+                    output=output,
                 )
             except Exception as exc:
                 _log.warning("Hint stream failed for exercise %r: %s", exercise_id, exc)
-                display.display_no_llm_message(exercise._global.prompts.on_no_llm)
+                output.show_unavailable(exercise._global.prompts.on_no_llm)
                 return True
 
             self._session.append_hint(
@@ -261,7 +243,7 @@ class NotebookTAMagic(Magics):
             )
             return True
 
-        return self._schedule_coroutine(_run())
+        return self._dispatcher.enqueue(_run, output)
 
     async def _stream_answer(
         self,
@@ -272,6 +254,7 @@ class NotebookTAMagic(Magics):
         student_code: str,
         test_results: list[TestResult] | None,
         hint_history: list[HintExchange] | None,
+        output: display.LLMOutput,
     ) -> str:
         """Stream an answer, applying the configured hook to every accumulated update."""
         stream_postprocessor: Callable[[str, bool], Awaitable[str]] | None = None
@@ -311,17 +294,23 @@ class NotebookTAMagic(Magics):
         )
         if stream_postprocessor is None:
             if self._debug:
-                return await stream_to_output(response_stream, show_thinking=True)
-            return await stream_to_output(response_stream)
+                return await stream_to_output(
+                    response_stream,
+                    show_thinking=True,
+                    output=output,
+                )
+            return await stream_to_output(response_stream, output=output)
         if not self._debug:
             return await stream_to_output(
                 response_stream,
                 postprocessor=stream_postprocessor,
+                output=output,
             )
         return await stream_to_output(
             response_stream,
             postprocessor=stream_postprocessor,
             show_thinking=True,
+            output=output,
         )
 
     def _reject_oversized_answer(self, exercise_id: str, student_code: str) -> bool:
@@ -346,50 +335,9 @@ class NotebookTAMagic(Magics):
         )
         return True
 
-    def _try_start_operation(self) -> bool:
-        """Reserve the single notebook operation slot if it is available."""
-        if self._operation_busy:
-            return False
-        self._operation_busy = True
-        display.set_hint_buttons_busy(True)
-        return True
-
-    def _finish_operation(self) -> None:
-        """Release the notebook operation slot and restore all hint buttons."""
-        if not self._operation_busy:
-            return
-        self._operation_busy = False
-        display.set_hint_buttons_busy(False)
-
-    def _finish_operation_after(self, result: object) -> bool:
-        """Release the operation slot when an asynchronous result completes."""
-        if isinstance(result, asyncio.Future):
-            result.add_done_callback(lambda _future: self._finish_operation())
-            return True
-        if not inspect.isawaitable(result):
-            return False
-
-        async def _wait_for_result() -> None:
-            try:
-                await result
-            finally:
-                self._finish_operation()
-
-        self._schedule_coroutine(_wait_for_result())
-        return True
-
-    def _schedule_coroutine(self, coroutine: Coroutine[Any, Any, _T]) -> Awaitable[_T] | _T:
-        """Schedule *coroutine* without blocking an already-running event loop."""
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = asyncio.get_event_loop()
-            return loop.run_until_complete(coroutine)
-        task = loop.create_task(coroutine)
-        self._background_tasks.add(task)
-        task.add_done_callback(self._background_tasks.discard)
-        return task
-
+    def shutdown_now(self) -> None:
+        """Cancel this magic instance's LLM work during reload or interpreter exit."""
+        self._dispatcher.shutdown_now()
 
 def load_ipython_extension(
     ip: InteractiveShell,
@@ -401,6 +349,9 @@ def load_ipython_extension(
     debug: bool = False,
 ) -> None:
     """Register the %%notebook_ta cell magic on the active IPython instance."""
+    global _active_magic_instance
+    if _active_magic_instance is not None:
+        _active_magic_instance.shutdown_now()
     magic_instance = NotebookTAMagic(
         shell=ip,
         registry=registry,
@@ -410,3 +361,4 @@ def load_ipython_extension(
         debug=debug,
     )
     ip.register_magics(magic_instance)
+    _active_magic_instance = magic_instance

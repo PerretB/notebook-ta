@@ -137,7 +137,15 @@ def add(a, b):
 
 When the cell runs, `notebook-ta` executes the student's code, runs the tests
 for `ex1`, and displays either a success analysis or test failures with a hint
-button.
+button. LLM analyses and hints run one at a time in submission order, while
+later notebook cells can continue executing and testing. Each queued or streaming
+response provides compact **Cancel** and **Cancel all** icons in its top-right corner;
+hover over either icon to see its action.
+
+Jupyter's Stop command interrupts the currently executing code or unit test; it
+does not cancel feedback already queued by completed cells. Restarting the kernel
+cancels all LLM work and clears hint history. Rerun a cell after restart if its
+saved output still shows an old queued or streaming status.
 
 See the complete example files in [docs/examples](docs/examples).
 

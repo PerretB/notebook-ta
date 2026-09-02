@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import threading
 import time
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from notebook_ta.config.models import (
     ExerciseConfig,
@@ -366,6 +368,32 @@ class TestMultipleTests:
 # ---------------------------------------------------------------------------
 
 class TestTimeoutHandling:
+    def test_keyboard_interrupt_terminates_active_test_process(self) -> None:
+        """Stopping a notebook cell must not leave its unit-test worker running."""
+        process = MagicMock()
+        process.join.side_effect = [KeyboardInterrupt(), None]
+        process.is_alive.return_value = True
+        result_queue = MagicMock()
+        context = MagicMock()
+        context.Process.return_value = process
+        context.Queue.return_value = result_queue
+
+        with (
+            patch("notebook_ta.testing.runner.multiprocessing.get_context", return_value=context),
+            pytest.raises(KeyboardInterrupt),
+        ):
+            TestRunner._run_with_timeout(
+                "interrupted",
+                lambda: True,
+                {},
+                5.0,
+                "en",
+            )
+
+        process.terminate.assert_called_once_with()
+        assert process.join.call_count == 2
+        result_queue.close.assert_called_once_with()
+
     def test_timeout_fails_and_cancels_unit_test(self) -> None:
         code = """\
 def test_slow(add):

@@ -46,5 +46,11 @@ def add(a, b):
     return a + b
 ```
 
+Code and unit tests finish before LLM feedback is queued, so **Run All** can check
+every exercise while analyses stream sequentially. Use the top-right **Cancel** icon
+to stop only that analysis or hint, or the stacked **Cancel all** icon to stop the
+active response and empty the queue. Jupyter's Stop command affects foreground cell execution instead;
+restarting the kernel cancels all feedback and clears hint history.
+
 See the example configuration and notebook files in
 [`docs/examples`](https://github.com/PerretB/notebook-ta/tree/main/docs/examples).

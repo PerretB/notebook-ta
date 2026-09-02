@@ -127,7 +127,7 @@ def load(
 
     # 6. Register the IPython magic
     try:
-        from IPython import get_ipython  # type: ignore[attr-defined]
+        from IPython.core.getipython import get_ipython
 
         ip = get_ipython()
         if ip is not None:
@@ -181,7 +181,7 @@ def get_registry() -> ExerciseRegistry:
 def _resolve_notebook_path() -> Path:
     """Auto-detect the current notebook path or raise ConfigurationError."""
     try:
-        from IPython import get_ipython as _gip  # type: ignore[attr-defined]
+        from IPython.core.getipython import get_ipython as _gip
 
         ip = _gip()
     except ImportError:

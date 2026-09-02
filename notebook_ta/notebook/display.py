@@ -23,8 +23,103 @@ _LLM_ANSWER_STYLE = (
     "border-radius: 6px; "
     "padding: 0.85em 1em; "
     "margin: 0.75em 0; "
+    "box-sizing: border-box; "
+    "max-width: 100%; "
+    "overflow-wrap: anywhere; "
+    "word-break: break-word; "
     "color: inherit"
 )
+_LLM_CONTROLLED_ANSWER_STYLE = _LLM_ANSWER_STYLE.replace(
+    "padding: 0.85em 1em;",
+    "padding: 0.85em 4.5em 0.85em 1em;",
+)
+
+_LLM_OUTPUT_STYLE = r"""
+<style>
+.jp-OutputArea-output:has(.notebook-ta-llm-panel),
+.jp-OutputArea-child:has(.notebook-ta-llm-panel),
+.output_subarea:has(.notebook-ta-llm-panel),
+.output_area:has(.notebook-ta-llm-panel),
+.output_wrapper:has(.notebook-ta-llm-panel),
+.cell-output:has(.notebook-ta-llm-panel),
+.vscode-cell-output:has(.notebook-ta-llm-panel),
+.vscode-cell-output-container:has(.notebook-ta-llm-panel),
+.cell-output-ipywidget-background:has(.notebook-ta-llm-panel),
+.notebook-ta-llm-panel,
+.notebook-ta-llm-panel.jupyter-widgets,
+.notebook-ta-llm-panel.widget-container,
+.notebook-ta-llm-panel .widget-box {
+    background: transparent !important;
+    background-color: transparent !important;
+}
+.notebook-ta-llm-panel {
+    position: relative !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow: visible !important;
+}
+.notebook-ta-llm-content,
+.notebook-ta-llm-content.jupyter-widgets,
+.notebook-ta-llm-content.widget-output {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    background: transparent !important;
+    background-color: transparent !important;
+}
+.cell-output-ipywidget-background:has(.notebook-ta-llm-panel) {
+    --jp-widgets-color: var(--vscode-editor-foreground, inherit);
+    --jp-widgets-font-size: var(--vscode-editor-font-size, inherit);
+}
+.notebook-ta-llm-controls {
+    position: absolute !important;
+    top: 1.05em;
+    right: 2em;
+    z-index: 2;
+    align-items: center;
+}
+.notebook-ta-llm-icon-button,
+.notebook-ta-llm-icon-button.jupyter-button,
+.notebook-ta-llm-icon-button.widget-button {
+    width: 1.65rem !important;
+    min-width: 1.65rem !important;
+    height: 1.65rem !important;
+    padding: 0 !important;
+    border: 1px solid transparent !important;
+    border-radius: 0.3rem !important;
+    background: transparent !important;
+    color: var(
+        --vscode-editor-foreground,
+        var(--jp-ui-font-color1, inherit)
+    ) !important;
+    font-size: 0 !important;
+    line-height: 1 !important;
+    opacity: 1;
+}
+.notebook-ta-llm-icon-button:hover,
+.notebook-ta-llm-icon-button:focus-visible {
+    background: rgba(220, 38, 38, 0.12) !important;
+    border-color: rgba(220, 38, 38, 0.28) !important;
+    color: var(--jp-error-color1, #dc2626) !important;
+    opacity: 1;
+}
+.notebook-ta-llm-icon-button::before {
+    display: block;
+    font-size: 0.78rem;
+    line-height: 1;
+}
+.notebook-ta-llm-cancel::before {
+    content: "\25A0";
+}
+.notebook-ta-llm-cancel-all::before {
+    content: "\25A0\A\25A0";
+    white-space: pre;
+    font-size: 0.58rem;
+    line-height: 0.48rem;
+}
+</style>
+""".strip()
 
 _LLM_WAITING_INDICATOR = """
 <style>
@@ -142,10 +237,15 @@ def hints_are_busy() -> bool:
     return _HINT_BUTTONS_BUSY
 
 
+def clear_cell_output() -> None:
+    """Clear saved and live output for the currently executing notebook cell."""
+    cast(Any, ipydisplay.clear_output)(wait=False)
+
+
 def format_llm_answer_markdown(answer: str) -> str:
     """Wrap an LLM answer in a visually distinct Markdown block."""
     return (
-        f'<div style="{_LLM_ANSWER_STYLE}">\n\n'
+        f'<div class="notebook-ta-llm-answer" style="{_LLM_CONTROLLED_ANSWER_STYLE}">\n\n'
         f'{translate("display_llm_answer_prefix")}: {answer}\n\n</div>'
     )
 
@@ -153,6 +253,142 @@ def format_llm_answer_markdown(answer: str) -> str:
 def format_llm_waiting_markdown() -> str:
     """Render the LLM answer block with an animated waiting indicator."""
     return format_llm_answer_markdown(_LLM_WAITING_INDICATOR)
+
+
+def format_llm_queued_markdown() -> str:
+    """Render the LLM answer block while its request waits in the serial queue."""
+    return format_llm_answer_markdown(translate("display_llm_queued"))
+
+
+class LLMOutput:
+    """Own the display handle for one queued or streaming LLM response."""
+
+    def __init__(self) -> None:
+        """Create one answer panel with top-right cancellation controls."""
+        import ipywidgets as widgets
+
+        self._last_answer = ""
+        self._terminal = False
+        self._cancel_callback: Callable[[], object] | None = None
+        self._cancel_all_callback: Callable[[], object] | None = None
+        self._content = widgets.Output(
+            layout=widgets.Layout(width="100%", overflow="visible"),
+        )
+        self._cancel_button = widgets.Button(
+            description=translate("display_llm_cancel"),
+            tooltip=translate("display_llm_cancel_tooltip"),
+            layout=widgets.Layout(width="1.65rem", height="1.65rem"),
+        )
+        self._cancel_button.add_class("notebook-ta-llm-icon-button")
+        self._cancel_button.add_class("notebook-ta-llm-cancel")
+        self._cancel_all_button = widgets.Button(
+            description=translate("display_llm_cancel_all"),
+            tooltip=translate("display_llm_cancel_all_tooltip"),
+            layout=widgets.Layout(width="1.65rem", height="1.65rem"),
+        )
+        self._cancel_all_button.add_class("notebook-ta-llm-icon-button")
+        self._cancel_all_button.add_class("notebook-ta-llm-cancel-all")
+        self._cancel_button.on_click(self._cancel_request)
+        self._cancel_all_button.on_click(self._cancel_all_requests)
+        self._controls = widgets.Box(
+            [self._cancel_button, self._cancel_all_button],
+            layout=widgets.Layout(display="flex"),
+        )
+        self._controls.add_class("notebook-ta-llm-controls")
+        self._cancel_all_button.layout.margin = "0 0 0 0.15rem"
+        self._content.add_class("notebook-ta-llm-content")
+        self._panel = widgets.Box(
+            [self._content, self._controls],
+            layout=widgets.Layout(width="100%", overflow="visible"),
+        )
+        self._panel.add_class("notebook-ta-llm-panel")
+        self.update_markdown(format_llm_queued_markdown())
+        cast(Any, ipydisplay.display)(cast(Any, ipydisplay.HTML)(_LLM_OUTPUT_STYLE))
+        cast(Any, ipydisplay.display)(self._panel)
+
+    def bind_cancellation(
+        self,
+        cancel_request: Callable[[], object],
+        cancel_all: Callable[[], object],
+    ) -> None:
+        """Connect this output's controls to its dispatcher callbacks."""
+        self._cancel_callback = cancel_request
+        self._cancel_all_callback = cancel_all
+
+    def show_waiting(self) -> None:
+        """Show that this request has reached the front of the queue."""
+        if self._terminal:
+            return
+        self.update_markdown(format_llm_waiting_markdown())
+
+    def show_answer(self, answer: str) -> None:
+        """Render an accumulated or completed LLM answer."""
+        if self._terminal:
+            return
+        self._last_answer = answer
+        self.update_markdown(format_llm_answer_markdown(answer))
+
+    def show_unavailable(self, message: str) -> None:
+        """Render an LLM failure in this request's original output area."""
+        content = (
+            f"**{translate('display_llm_unavailable_heading')}**\n\n{message}"
+        )
+        self._show_terminal(content)
+
+    def show_failed(self, detail: str) -> None:
+        """Render an unexpected dispatcher failure and finalize the controls."""
+        content = translate(
+            "display_llm_failed",
+            {"detail": html.escape(detail)},
+        )
+        self._show_terminal(content)
+
+    def show_cancelled(self) -> None:
+        """Render cancellation while preserving any partial streamed response."""
+        key = "display_llm_cancelled_partial" if self._last_answer else "display_llm_cancelled"
+        content = translate(key)
+        if self._last_answer:
+            content = f"{content}\n\n{self._last_answer}"
+        self._show_terminal(content)
+
+    def mark_completed(self) -> None:
+        """Mark a successfully rendered response as terminal and hide its controls."""
+        self._terminal = True
+        self._hide_controls()
+
+    def update_markdown(self, content: str) -> None:
+        """Replace the Markdown bundle inside this response's composite widget."""
+        self._content.outputs = (
+            {
+                "output_type": "display_data",
+                "data": {"text/markdown": content, "text/plain": content},
+                "metadata": {},
+            },
+        )
+
+    def _show_terminal(self, content: str) -> None:
+        """Render terminal content once and disable further request updates."""
+        if self._terminal:
+            return
+        self._terminal = True
+        self.update_markdown(format_llm_answer_markdown(content))
+        self._hide_controls()
+
+    def _hide_controls(self) -> None:
+        """Disable and hide both cancellation controls."""
+        self._cancel_button.disabled = True
+        self._cancel_all_button.disabled = True
+        self._controls.layout.display = "none"
+
+    def _cancel_request(self, _event: object) -> None:
+        """Invoke the bound callback for this request."""
+        if not self._terminal and self._cancel_callback is not None:
+            self._cancel_callback()
+
+    def _cancel_all_requests(self, _event: object) -> None:
+        """Invoke the bound callback for every outstanding request."""
+        if not self._terminal and self._cancel_all_callback is not None:
+            self._cancel_all_callback()
 
 
 class InitializationDisplay:

@@ -60,6 +60,7 @@ notebook_ta/
 │   └── runner.py             # TestRunner, TestResult, namespace injection
 ├── notebook/
 │   ├── __init__.py
+│   ├── dispatcher.py         # Serial LLM queue, cancellation, and shutdown
 │   ├── magic.py              # %%notebook_ta IPython cell magic
 │   ├── display.py            # Notebook display helpers
 │   ├── streaming.py          # Streaming LLM response to notebook output
@@ -405,6 +406,12 @@ For each test:
 3. Any exception raised during test execution is caught and recorded as a failed `TestResult` with
    the exception message
 
+Each callable executes in a spawned child process with its configured wall-clock timeout. A normal
+timeout terminates and joins the child and returns a failed `TestResult`. If Jupyter interrupts the
+parent while it is waiting, `KeyboardInterrupt` is re-raised after the child is terminated and
+joined and its result queue is closed. The interrupted cell therefore stops without queueing LLM
+analysis and does not leave its unit-test worker running.
+
 ### 6.3 Namespace Injection
 
 Test functions receive student code in one of two ways, determined by `inspect.signature()` at call
@@ -449,25 +456,65 @@ IPython instance. Called automatically by `notebook_ta.load()`.
 
 Execution steps:
 
-1. Retrieve the exercise from `ExerciseRegistry`; if not found, call
+1. Call `display.clear_cell_output()` immediately so rerunning a cell removes every saved result,
+   widget, and cancelled or completed response from its previous execution. This explicit kernel
+   `clear_output(wait=False)` message avoids depending on frontend-specific Run All clearing.
+2. Retrieve the exercise from `ExerciseRegistry`; if not found, call
    `display.display_unavailable_message()` and return
-2. Reserve the `NotebookTAMagic` instance's in-process busy guard; if another
-   notebook-ta operation is already running, call `display.display_busy_message()` and return
-3. Disable all registered hint buttons and set their label to `"Busy"`
-4. For `answer_type = "free_text"`, reject empty or oversized answers and stream LLM evaluation
+3. For `answer_type = "free_text"`, reject empty or oversized answers and queue LLM evaluation
    without executing the cell or running tests. Otherwise, execute `cell` in the IPython user
    namespace via `ip.run_cell(cell)` and inspect the returned
    `ExecutionResult`. If `error_before_exec` or `error_in_exec` is set, display the execution
    failure and stop without running tests or contacting the LLM.
-5. Run `TestRunner.run(exercise, ip.user_ns)` only after successful cell execution
-6. Branch on results:
-   - **All pass** → `display.display_success()` + stream LLM success analysis
+4. Run `TestRunner.run(exercise, ip.user_ns)` synchronously after successful cell execution and
+   before a later notebook cell can mutate the shared user namespace.
+5. Branch on results:
+   - **All pass** → `display.display_success()` + queue LLM success analysis
    - **Any fail** → `display.display_test_results(results)` + `display.display_hints_button()`
    - **LLM unavailable** (either branch) → `display.display_no_llm_message()`
 
-7. In a `finally` block, restore registered hint buttons to enabled `"Give me hints"` state
+6. For each accepted LLM request, build the prompt from the current cell's immutable code and test
+   result snapshot, create an `LLMOutput` placeholder in that cell, and append the request to the
+   `NotebookTAMagic` FIFO queue. The magic then returns without waiting for LLM feedback.
+7. The queue processes exactly one analysis or hint request at a time. Completion, cancellation,
+   or failure of one request releases the next request; a failed request never stalls the queue.
 
-### 7.2 Hint History & LLM Escalation (`notebook/session.py`)
+This separation lets Jupyter "Run All" execute and test every notebook-ta cell immediately while
+LLM feedback fills the originating cells sequentially in the background.
+
+### 7.2 Serial LLM Dispatcher (`notebook/dispatcher.py`)
+
+`LLMDispatcher` owns an explicit FIFO of operation factories rather than already-created
+coroutines. Each job contains a request ID, its cell-local `LLMOutput`, a completion future, and an
+analysis or hint coroutine factory. A single retained worker creates and awaits one operation at a
+time. Operation factories prevent a request cancelled while queued from producing an unawaited
+coroutine.
+
+Cancellation behavior:
+
+- **Cancel** removes a pending job without invoking its provider, or cancels the active stream.
+- **Cancel all** drains all pending jobs and cancels the active stream.
+- A queued cancellation renders a terminal message immediately. Active cancellation preserves
+  accumulated output beneath a partial-response warning.
+- Cancellation completes the job future with `CancelledError`; a cancelled hint is not appended to
+  `SessionState`. The dispatcher then advances to the next job.
+- Failure of a job is finalized in its own output and never stalls later jobs.
+
+`shutdown()` performs an awaitable, idempotent drain for controlled teardown and tests.
+`shutdown_now()` is registered with `atexit` as best-effort kernel-process cleanup. A hard kernel
+restart destroys the event loop before Python can reliably update old frontend display handles, so
+requests are never persisted or resumed. Saved queued or spinner output can remain visually stale
+until the student reruns or clears that cell.
+
+`load_ipython_extension()` also calls `shutdown_now()` on the previously registered magic before
+installing a replacement. Rerunning a setup cell in the same kernel therefore cannot leave an old
+dispatcher streaming alongside the new one.
+
+Jupyter Stop and LLM cancellation intentionally have separate meanings. Stop interrupts foreground
+student code or tests. Once a cell has completed and queued its immutable request, its feedback
+continues unless the student uses **Cancel**, **Cancel all**, or restarts the kernel.
+
+### 7.3 Hint History & LLM Escalation (`notebook/session.py`)
 
 `SessionState` is a singleton held by the magic instance.
 
@@ -489,13 +536,15 @@ The deque for each exercise is initialized with `maxlen = hint_history_length` f
 
 On each "Give me hints" button click:
 
-1. Ignore the click immediately if the global hint-button busy state is already active
-2. Reserve the `NotebookTAMagic` busy guard and disable all registered hint buttons
-3. Retrieve `history = session.get_history(exercise_id, hint_history_length)`
-4. Build the prompt via `exercise.build_prompt(student_code, test_results, hint_history=history)`
-5. Stream the LLM response, postprocessing every accumulated update when a hook is configured
-6. Append `HintExchange(student_code, processed_response)` to history
-7. In a `finally` block, restore registered hint buttons to enabled `"Give me hints"` state
+1. Disable only the clicked button while its request is pending
+2. Retrieve `history = session.get_history(exercise_id, hint_history_length)`
+3. Build the prompt via `exercise.build_prompt(student_code, test_results, hint_history=history)`
+4. Create a cell-local `LLMOutput` and append the hint request to the same serial FIFO used by
+   automatic analyses
+5. Stream the LLM response when the request reaches the queue head, postprocessing every
+   accumulated update when a hook is configured
+6. Append `HintExchange(student_code, processed_response)` to history and restore the clicked
+   button; other hint buttons and notebook cells remain usable throughout
 
 The `on_failure` prompt is used for all hint requests. The LLM naturally escalates its guidance
 based on the previous hint exchanges appended to the context. No predefined hint levels or hint
@@ -504,28 +553,35 @@ texts are stored in the configuration.
 `SessionState` is attached to the `NotebookTAMagic` instance and persists for the lifetime of the
 kernel session. Restarting the kernel clears all history.
 
-### 7.3 Display Components (`notebook/display.py`)
+### 7.4 Display Components (`notebook/display.py`)
 
 All display functions use `IPython.display` and `ipywidgets`.
 
 | Function                              | Output                                                                   |
 |---------------------------------------|--------------------------------------------------------------------------|
 | `display_success()`                   | "✅ Tests passed" indicator before streaming begins                      |
+| `clear_cell_output()`                 | Immediately clears all outputs from the current cell's previous execution |
 | `display_execution_failure(error)`   | Compilation/runtime failure; tests and LLM analysis are skipped          |
 | `display_test_results(results)`       | Formatted list of test names with pass/fail status and messages          |
 | `display_hints_button(exercise_id, callback)` | `ipywidgets.Button` labeled "💡 Give me hints"               |
+| `LLMOutput`                           | Composite cell-local widget containing Markdown feedback and top-right icon controls for per-request and queue-wide cancellation |
 | `display_no_llm_message(message)`     | Renders the configured `on_no_llm` string as `IPython.display.Markdown` |
 | `display_unavailable_message(id)`     | Rendered warning when the exercise ID is not found in the registry       |
-| `display_busy_message()`              | Rendered warning when notebook-ta ignores a request because another notebook-ta operation is already running |
 | `display_debug_prompt(prompt, call_type)` | Collapsible `ipywidgets.Accordion` showing the full LLM prompt; only called when `debug=True` |
 
-### 7.4 Streaming (`notebook/streaming.py`)
+### 7.5 Streaming (`notebook/streaming.py`)
 
-`stream_to_output(async_gen: AsyncIterator[str | LLMStreamChunk], *, postprocessor=None, show_thinking=False) -> str`
+`stream_to_output(async_gen, *, postprocessor=None, show_thinking=False, output=None) -> str`
 
-1. An `ipywidgets.Output` widget is displayed immediately as a placeholder
-2. An `asyncio` task accumulates incoming chunks; on each chunk, the `Output` widget is cleared and
-   the accumulated text is re-rendered as `IPython.display.Markdown`
+1. `LLMOutput` is normally created synchronously by the magic before queueing. It displays one
+   composite `ipywidgets.Box` containing an `Output` child for the Markdown response and an
+   absolutely positioned control child in the answer box's top-right corner. The controls retain
+   localized text and tooltips for accessibility, while CSS presents them as one stop-square icon
+   for **Cancel** and two vertically stacked stop-square icons for **Cancel all**. Direct callers
+   that do not supply `output` retain the legacy behavior of creating a waiting display on entry.
+2. When the request reaches the queue head, its placeholder changes to a spinner. Incoming chunks
+   are accumulated and replace the `text/markdown` bundle in the same `Output` widget, so updates
+   do not add notebook output records or detach the controls from the answer box.
 3. The full accumulated response string is returned once the stream ends
 
 `LLMStreamChunk` categorizes provider output as `thinking` or `answer`. In debug mode,
@@ -549,7 +605,7 @@ update; later updates retry the hook.
 `nest_asyncio` is applied at `notebook_ta.load()` time to allow `asyncio` event loop nesting in
 Jupyter environments that do not natively support it.
 
-### 7.5 Feedback Format
+### 7.6 Feedback Format
 
 All LLM responses are rendered as Markdown using `IPython.display.Markdown`. This allows the LLM
 to use headings, bullet lists, and inline code in its feedback.
@@ -767,6 +823,7 @@ sequenceDiagram
     participant REG as ExerciseRegistry
     participant TR as TestRunner
     participant EX as Exercise
+    participant Q as Serial LLM Queue
     participant LLM as LLMProvider
     participant DISP as Display / Streamer
 
@@ -777,9 +834,12 @@ sequenceDiagram
     MAG->>TR: run(exercise, user_ns)
     TR-->>MAG: [TestResult(passed=True), …]
     MAG->>DISP: display_success()
-    MAG->>EX: build_prompt(student_code, results=None, history=[])
+    MAG->>EX: build_prompt(student_code, results, history=None)
     EX-->>MAG: prompt_str
-    MAG->>LLM: stream(prompt_str)
+    MAG->>DISP: create queued LLMOutput in cell
+    MAG->>Q: enqueue(prompt_str, LLMOutput)
+    Note over CELL,MAG: Cell completes; Run All can execute the next cell
+    Q->>LLM: stream(prompt_str) when prior request completes
     LLM-->>DISP: AsyncIterator[str]
     DISP->>DISP: stream_to_output() → Markdown render
 ```
@@ -795,6 +855,7 @@ sequenceDiagram
     participant BTN as Hints Button (ipywidgets)
     participant SS as SessionState
     participant EX as Exercise
+    participant Q as Serial LLM Queue
     participant LLM as LLMProvider
 
     CELL->>MAG: cell_magic("ex1", student_code)
@@ -809,7 +870,9 @@ sequenceDiagram
     SS-->>MAG: list[HintExchange]
     MAG->>EX: build_prompt(student_code, results, hint_history)
     EX-->>MAG: hint_prompt_str
-    MAG->>LLM: stream(hint_prompt_str)
+    MAG->>DISP: create queued LLMOutput in cell
+    MAG->>Q: enqueue(hint_prompt_str, LLMOutput)
+    Q->>LLM: stream(hint_prompt_str) when prior request completes
     LLM-->>DISP: AsyncIterator[str]
     DISP->>DISP: stream_to_output() → full_response
     MAG->>SS: append_hint("ex1", HintExchange(student_code, full_response))

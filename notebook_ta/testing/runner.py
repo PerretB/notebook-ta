@@ -162,31 +162,41 @@ class TestRunner:
         result_queue: Any = ctx.Queue()
         process = ctx.Process(target=_execute_test_callable, args=(payload, result_queue))
         sys.modules.setdefault("__main__", types.ModuleType("__main__"))
-        process.start()
-        process.join(timeout)
-
-        if process.is_alive():
-            process.terminate()
-            process.join()
-            result_queue.close()
-            return TestResult(
-                name=name,
-                passed=False,
-                message=translate("runner_timed_out", {"timeout": timeout}, language=language),
-            )
-
         try:
-            result_payload = result_queue.get_nowait()
-        except queue.Empty:
-            return TestResult(
-                name=name,
-                passed=False,
-                message=translate("runner_process_no_result", language=language),
-            )
+            process.start()
+            try:
+                process.join(timeout)
+            except BaseException:
+                if process.is_alive():
+                    process.terminate()
+                    process.join()
+                raise
+
+            if process.is_alive():
+                process.terminate()
+                process.join()
+                return TestResult(
+                    name=name,
+                    passed=False,
+                    message=translate(
+                        "runner_timed_out",
+                        {"timeout": timeout},
+                        language=language,
+                    ),
+                )
+
+            try:
+                result_payload = result_queue.get_nowait()
+            except queue.Empty:
+                return TestResult(
+                    name=name,
+                    passed=False,
+                    message=translate("runner_process_no_result", language=language),
+                )
+
+            return cast(TestResult, cloudpickle.loads(result_payload))
         finally:
             result_queue.close()
-
-        return cast(TestResult, cloudpickle.loads(result_payload))
 
     @staticmethod
     def _invoke_callable(
