@@ -36,7 +36,7 @@ class NotebookTAMagic(Magics):
         self,
         shell: InteractiveShell | None,
         registry: ExerciseRegistry,
-        llm_provider: LLMProvider,
+        llm_provider: LLMProvider | None,
         session: SessionState,
         *,
         answer_postprocessor: AnswerPostprocessor | None = None,
@@ -137,7 +137,7 @@ class NotebookTAMagic(Magics):
         if self._reject_oversized_answer(exercise_id, student_code):
             return None
 
-        if not self._llm.is_available():
+        if self._llm is None or not self._llm.is_available():
             exercise = self._registry.get(exercise_id)
             display.display_no_llm_message(
                 exercise._global.prompts.on_no_llm
@@ -203,7 +203,7 @@ class NotebookTAMagic(Magics):
             exercise._global.prompts.hint_history_length,
         )
 
-        if not self._llm.is_available():
+        if self._llm is None or not self._llm.is_available():
             display.display_no_llm_message(exercise._global.prompts.on_no_llm)
             return True
 
@@ -257,6 +257,7 @@ class NotebookTAMagic(Magics):
         output: display.LLMOutput,
     ) -> str:
         """Stream an answer, applying the configured hook to every accumulated update."""
+        assert self._llm is not None
         stream_postprocessor: Callable[[str, bool], Awaitable[str]] | None = None
         if self._answer_postprocessor is not None:
             from notebook_ta.llm.postprocessing import LLMRequest, postprocess_answer
@@ -342,7 +343,7 @@ class NotebookTAMagic(Magics):
 def load_ipython_extension(
     ip: InteractiveShell,
     registry: ExerciseRegistry,
-    llm_provider: LLMProvider,
+    llm_provider: LLMProvider | None,
     session: SessionState,
     *,
     answer_postprocessor: AnswerPostprocessor | None = None,

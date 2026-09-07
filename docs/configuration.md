@@ -68,6 +68,11 @@ only checked and are never started or modified.
 Hardware auto-detection, Ollama setup progress, and the final loaded summary are grouped in one
 rounded **notebook-ta initialization** panel with a subtle theme-friendly background.
 
+Pass `llm_enabled=False` to `notebook_ta.load()` to run a notebook without LLM integration. In
+this mode notebook-ta does not select a model, create or probe a provider, or start Ollama. Exercise
+registration and unit tests continue to work, and feedback or hint requests display the configured
+`prompts.on_no_llm` message. The default is `llm_enabled=True`.
+
 #### `[[llm.available_models]]` — Auto-selection Candidates
 
 Used only when `model = "auto"`. The system selects the model with the highest `min_ram_gb` whose
