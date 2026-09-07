@@ -474,6 +474,14 @@ class InitializationDisplay:
         )
         self._render()
 
+    def show_loaded_without_llm(self, exercise_count: int) -> None:
+        """Add the loaded summary for a session with LLM integration disabled."""
+        self._rows["loaded"] = translate(
+            "initialization_loaded_without_llm",
+            {"exercise_count": exercise_count},
+        )
+        self._render()
+
 
 def display_initialization() -> InitializationDisplay:
     """Display and return the shared notebook-ta initialization panel."""

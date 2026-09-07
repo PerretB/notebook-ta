@@ -372,3 +372,14 @@ def test_initialization_display_uses_llm_answer_style_and_one_display_handle() -
     assert "pulling &lt;manifest&gt;" in content
     assert translate("ollama_setup_pulling_model") in content
     assert "3 exercise(s) registered" in content
+
+
+def test_initialization_display_shows_loaded_without_llm() -> None:
+    """The initialization panel should clearly report an intentionally disabled LLM."""
+    with patch("notebook_ta.notebook.display.ipydisplay.display") as display_mock:
+        initialization = display_initialization()
+        initialization.show_loaded_without_llm(2)
+
+    content = display_mock.return_value.update.call_args.args[0].data
+    assert "LLM integration disabled" in content
+    assert "2 exercise(s) registered" in content

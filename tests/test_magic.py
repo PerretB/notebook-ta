@@ -366,6 +366,17 @@ class TestUnknownExercise:
 
 class TestLLMUnavailable:
     @patch("notebook_ta.notebook.magic.display")
+    def test_no_llm_message_when_provider_is_disabled(self, mock_display) -> None:
+        """A disabled provider should use the unavailable path without a backend probe."""
+        magic = make_magic()
+        magic._llm = None
+
+        result = magic._trigger_llm("ex1", "def add(a,b): return a+b", [], None)
+
+        assert result is None
+        mock_display.display_no_llm_message.assert_called_once_with("LLM unavailable.")
+
+    @patch("notebook_ta.notebook.magic.display")
     def test_no_llm_message_when_unavailable(self, mock_display) -> None:
         ip = make_ip_stub()
         magic = make_magic(ip=ip, llm_available=False)

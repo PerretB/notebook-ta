@@ -676,7 +676,9 @@ def load(
     global_config: str | Path,
     exercises_config: str | Path,
     *,
+    notebook_path: str | Path | None = None,
     llm_overrides: dict[str, Any] | None = None,
+    llm_enabled: bool = True,
     debug: bool = False,
 ) -> None:
     """
@@ -700,14 +702,18 @@ def get_registry() -> ExerciseRegistry:
 1. Call `setup_logging(debug=debug)` to configure the logging hierarchy
 2. Load and validate both TOML files via `ConfigLoader`
 3. Resolve the optional answer postprocessor, including trusted inline-code execution or import
-4. If `llm.model == "auto"`: run setup wizard, display result, update `LLMConfig.model`
-5. Create the LLM provider via `create_provider()`
-6. For a localhost Ollama provider, ensure the server and selected model are ready while displaying
-   live progress; setup failures degrade gracefully and leave the provider unavailable
+4. If `llm_enabled` and `llm.model == "auto"`: run setup wizard, display result, update
+   `LLMConfig.model`
+5. If `llm_enabled`: create the LLM provider via `create_provider()`
+6. If enabled with a localhost Ollama provider, ensure the server and selected model are ready while
+   displaying live progress; setup failures degrade gracefully and leave the provider unavailable
 7. Populate the `ExerciseRegistry`
 8. Register `%%notebook_ta` magic via `load_ipython_extension()`
 
 Calling `load()` a second time replaces the existing configuration and re-registers the magic.
+When `llm_enabled=False`, the magic is registered with no provider, model auto-selection and all
+provider setup or availability probes are skipped, and analysis or hint requests display the
+configured `prompts.on_no_llm` message. The module-level provider singleton remains `None`.
 
 ---
 

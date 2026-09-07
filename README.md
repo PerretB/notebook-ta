@@ -155,6 +155,9 @@ See the complete example files in [docs/examples](docs/examples).
 
 - Load both configuration files from local paths or `https://` URLs.
 - Override LLM settings at load time with `llm_overrides`.
+- Disable all LLM connections and local Ollama startup with `llm_enabled=False`; exercises and
+  unit tests remain available, while feedback and hint requests show the configured `on_no_llm`
+  message.
 - Enable prompt inspection and DEBUG logging with `debug=True`. When a model/provider
   exposes separate thinking content, it is enabled and shown before the final answer in the
   answer box.

@@ -38,6 +38,7 @@ def load(
     *,
     notebook_path: str | Path | None = None,
     llm_overrides: dict[str, Any] | None = None,
+    llm_enabled: bool = True,
     debug: bool = False,
 ) -> None:
     """Load configuration files, register exercises, run auto-setup if needed,
@@ -59,6 +60,9 @@ def load(
             from *global_config*. Valid keys mirror :class:`LLMConfig` fields
             (e.g. ``model``, ``base_url``, ``provider``, ``api_key_env``, ``timeout``).
             Literal API key values are not accepted.
+        llm_enabled: When ``False``, skip LLM provider creation, availability checks,
+            automatic model selection, and local Ollama setup. The notebook magic remains
+            available and behaves as though no LLM backend can be reached. Defaults to ``True``.
         debug: When ``True``, enable DEBUG-level logging, display the final LLM
                prompt before each call, and show separated model thinking before
                the final answer when the provider supplies it. Defaults to ``False``.
@@ -91,16 +95,20 @@ def load(
     exercises = [Exercise(config=ex_cfg, global_config=cfg) for ex_cfg in exercise_configs]
 
     # 2. Auto-setup wizard
-    if cfg.llm.model == "auto":
+    if llm_enabled and cfg.llm.model == "auto":
         _run_setup_wizard(cfg, initialization)
 
     # 3. Create LLM provider
-    try:
-        provider = create_provider(cfg.llm)
-    except ValueError as exc:
-        raise ConfigurationError(f"Invalid LLM provider configuration: {exc}") from exc
-    _log.debug("LLM provider created: %r (model=%r)", cfg.llm.provider, cfg.llm.model)
-    _setup_local_ollama(provider, initialization)
+    provider: LLMProvider | None = None
+    if llm_enabled:
+        try:
+            provider = create_provider(cfg.llm)
+        except ValueError as exc:
+            raise ConfigurationError(f"Invalid LLM provider configuration: {exc}") from exc
+        _log.debug("LLM provider created: %r (model=%r)", cfg.llm.provider, cfg.llm.model)
+        _setup_local_ollama(provider, initialization)
+    else:
+        _log.debug("LLM integration disabled for this notebook session")
 
     # 4. Resolve missing statements from the notebook file
     missing = [ex for ex in exercise_configs if ex.statement is None]
@@ -163,9 +171,12 @@ def load(
 
     if initialization is not None:
         with contextlib.suppress(Exception):
-            initialization.show_loaded(
-                cfg.llm.provider, cfg.llm.model, len(exercise_configs)
-            )
+            if llm_enabled:
+                initialization.show_loaded(
+                    cfg.llm.provider, cfg.llm.model, len(exercise_configs)
+                )
+            else:
+                initialization.show_loaded_without_llm(len(exercise_configs))
 
 
 def get_registry() -> ExerciseRegistry:

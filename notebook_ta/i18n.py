@@ -85,6 +85,10 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
             "✅ notebook-ta loaded — provider: <code>{provider}</code>, "
             "model: <code>{model}</code>, {exercise_count} exercise(s) registered."
         ),
+        "initialization_loaded_without_llm": (
+            "✅ notebook-ta loaded — LLM integration disabled, "
+            "{exercise_count} exercise(s) registered."
+        ),
         "load_success": (
             "**✅ notebook-ta loaded.**  Provider: `{provider}` - Model: `{model}`  \n"
             "{exercise_count} exercise(s) registered."
@@ -206,6 +210,10 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
         "initialization_loaded": (
             "✅ notebook-ta chargé — fournisseur : <code>{provider}</code>, "
             "modèle : <code>{model}</code>, {exercise_count} exercice(s) enregistré(s)."
+        ),
+        "initialization_loaded_without_llm": (
+            "✅ notebook-ta chargé — intégration LLM désactivée, "
+            "{exercise_count} exercice(s) enregistré(s)."
         ),
         "load_success": (
             "**✅ notebook-ta chargé:**  Fournisseur : `{provider}` - Modèle : `{model}`  \n"
