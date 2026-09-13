@@ -90,6 +90,18 @@ def build(
         )
 
     with ui.card().classes("w-full"):
+        ui.label("Global setup code").classes("text-md font-bold")
+        ui.label(
+            "Executed for every Python exercise before that exercise's own setup code. "
+            "The global and exercise setup code share the same namespace."
+        ).classes("text-caption")
+        ui.codemirror(
+            value=project.global_setup_code,
+            language="Python",
+            on_change=tracked_on_change(state, project, "global_setup_code"),
+        ).classes("w-full").style("min-height: 260px")
+
+    with ui.card().classes("w-full"):
         ui.label("Internal Model").classes("text-md font-bold")
         ui.label(
             "Used to generate draft student solutions in the Exercises tab. "

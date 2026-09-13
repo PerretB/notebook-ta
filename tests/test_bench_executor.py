@@ -142,6 +142,7 @@ class TestBenchExecutorSequential:
             make_model(),
             make_prompt_version(),
             setup_code="raise RuntimeError('must not run')",
+            global_setup_code="raise RuntimeError('global setup must not run')",
         )
         provider = FakeProvider(["feedback"])
         run = BenchmarkRun(prompt_version_id="V1", model_labels=["m1"], job_count=1)
@@ -160,6 +161,7 @@ class TestBenchExecutorSequential:
         worker.assert_not_called()
         assert records[0].status == "completed"
         assert records[0].test_results == []
+        assert records[0].input_snapshot.global_setup_code is None
         assert records[0].input_snapshot.setup_code is None
         assert records[0].input_snapshot.answer_type == "free_text"
         assert "## Evaluation Criteria" in records[0].full_prompt
@@ -500,6 +502,75 @@ def slow(add):
         assert records[0].status == "completed"
         assert records[0].test_results[0].passed is True
         assert records[0].input_snapshot.setup_code == "expected = 5"
+
+    @pytest.mark.asyncio
+    async def test_global_setup_runs_before_exercise_setup_in_shared_namespace(self) -> None:
+        config = make_exercise(
+            tests=[
+                TestDefinition(
+                    name="uses cumulative setup",
+                    code=(
+                        "def check(order, shared_value): "
+                        "return order == ['global', 'exercise'] and shared_value == 4"
+                    ),
+                )
+            ]
+        )
+        job = BenchJob(
+            config,
+            make_solution(),
+            make_model("m1"),
+            make_prompt_version(),
+            "order.append('exercise')\nshared_value *= 2",
+            "order = ['global']\nshared_value = 2",
+        )
+        provider = FakeProvider(["ok"])
+        run = BenchmarkRun(prompt_version_id="V1", model_labels=["m1"], job_count=1)
+        executor = BenchExecutor()
+        records = []
+
+        def on_progress(job, status, message, record) -> None:
+            if record is not None:
+                records.append(record)
+
+        with patch("notebook_ta.bench.executor.create_provider", return_value=provider):
+            await executor.run([job], run, on_progress)
+
+        assert records[0].test_results[0].passed is True
+        assert records[0].input_snapshot.global_setup_code == (
+            "order = ['global']\nshared_value = 2"
+        )
+        assert records[0].input_snapshot.setup_code == (
+            "order.append('exercise')\nshared_value *= 2"
+        )
+
+    @pytest.mark.asyncio
+    async def test_global_setup_failure_skips_exercise_setup(self) -> None:
+        config = make_exercise()
+        job = BenchJob(
+            config,
+            make_solution(),
+            make_model("m1"),
+            make_prompt_version(),
+            'raise RuntimeError("exercise setup must not run")',
+            'raise RuntimeError("global setup boom")',
+        )
+        provider = FakeProvider(["ok"])
+        run = BenchmarkRun(prompt_version_id="V1", model_labels=["m1"], job_count=1)
+        executor = BenchExecutor()
+        records = []
+
+        def on_progress(job, status, message, record) -> None:
+            if record is not None:
+                records.append(record)
+
+        with patch("notebook_ta.bench.executor.create_provider", return_value=provider):
+            await executor.run([job], run, on_progress)
+
+        message = records[0].test_results[0].message or ""
+        assert "Global setup code failed" in message
+        assert "global setup boom" in message
+        assert "exercise setup must not run" not in message
 
     @pytest.mark.asyncio
     async def test_benchmark_setup_code_failure_becomes_failed_test_result(self) -> None:

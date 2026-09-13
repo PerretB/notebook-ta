@@ -34,10 +34,11 @@ third-party projects or student submissions.
 ## Workflow
 
 1. **Settings** — configure the *internal model* (used only to help draft example student
-   solutions—never to score benchmark output), Python paths, tags, and autosave. Every tag has an
-   editable color which is used for its badges throughout the app. **Save As** opens a native file
-   picker. **Close project** returns to the welcome dialog; unsaved changes require explicit
-   confirmation before they are discarded.
+   solutions—never to score benchmark output), global setup code, Python paths, tags, and autosave.
+   Global setup code runs for every Python exercise before that exercise's own setup code; both
+   blocks share the solution namespace. Every tag has an editable color which is used for its
+   badges throughout the app. **Save As** opens a native file picker. **Close project** returns to
+   the welcome dialog; unsaved changes require explicit confirmation before they are discarded.
 2. **Exercises** — exercises are expanded by default and their solution cards are arranged side by
    side with horizontal scrolling. Edit exercise and solution display names inline, append new
    exercises to a local TOML catalog, add solutions manually or with the internal model, tag them
@@ -89,11 +90,11 @@ environment whenever you reopen the project and run that model.
 
 ## Project files
 
-Everything (settings, per-exercise setup code, student solutions, prompt version history, and the
-full execution history with metrics) is saved to a single JSON project file via the **Save** button
-or autosave. API key values are excluded; project files contain only their environment-variable
-references. The autosave interval must be a positive number of seconds.
+Everything (settings, global and per-exercise setup code, student solutions, prompt version history,
+and the full execution history with metrics) is saved to a single JSON project file via the
+**Save** button or autosave. API key values are excluded; project files contain only their
+environment-variable references. The autosave interval must be a positive number of seconds.
 
-Existing schema-v2 project files remain compatible. The persisted `code` and `student_code` field
-names are retained for both answer types; snapshots additionally record the answer type and
-evaluation criteria.
+Existing schema-v2 project files remain compatible; projects without global setup code load with an
+empty default. The persisted `code` and `student_code` field names are retained for both answer
+types; snapshots additionally record the answer type, evaluation criteria, and both setup blocks.

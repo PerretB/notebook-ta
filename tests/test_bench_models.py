@@ -174,11 +174,22 @@ class TestBenchProjectSerialization:
 
     def test_project_setup_code_round_trips_json(self) -> None:
         project = BenchProject(settings=make_settings())
+        project.global_setup_code = "shared_value = 2"
         project.setup_code_by_exercise["ex1"] = "expected = 5"
 
         restored = BenchProject.model_validate_json(project.model_dump_json())
 
+        assert restored.global_setup_code == "shared_value = 2"
         assert restored.setup_code_for("ex1") == "expected = 5"
+
+    def test_project_without_global_setup_code_loads_with_empty_default(self) -> None:
+        project = BenchProject(settings=make_settings())
+        data = project.model_dump()
+        del data["global_setup_code"]
+
+        restored = BenchProject.model_validate(data)
+
+        assert restored.global_setup_code == ""
 
     def test_project_without_tag_colors_loads_with_defaults(self) -> None:
         project = BenchProject(settings=make_settings())

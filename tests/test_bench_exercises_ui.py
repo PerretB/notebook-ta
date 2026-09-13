@@ -95,6 +95,7 @@ async def test_run_tests_drops_duplicate_clicks_when_setup_code_exists(user: Use
     state = BenchAppState(ProjectStore(None))
     exercise = ExerciseConfig(id="ex1", statement="Example")
     state.exercise_registry[exercise.id] = exercise
+    state.project.global_setup_code = "shared = 1"
     state.project.setup_code_by_exercise[exercise.id] = "expected = 1"
     state.add_solution(exercise.id, code="answer = 1")
 
@@ -117,6 +118,8 @@ async def test_run_tests_drops_duplicate_clicks_when_setup_code_exists(user: Use
         await asyncio.sleep(0.3)
 
     assert run.call_count == 1
+    assert run.call_args.kwargs["global_setup_code"] == "shared = 1"
+    assert run.call_args.kwargs["setup_code"] == "expected = 1"
     rendered_html = [element.content for element in user.find(ui.html).elements]
     assert sum("passed once" in content for content in rendered_html) == 1
 

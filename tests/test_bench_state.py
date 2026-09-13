@@ -71,11 +71,13 @@ class TestRunNaming:
             )
         )
         state.project.draft_selected_model_labels = ["m1"]
+        state.project.global_setup_code = "shared = 2"
         state.update_exercise_setup_code("ex1", "expected = 5")
 
         _run, jobs = state.build_run_jobs()
 
         assert jobs[0].setup_code == "expected = 5"
+        assert jobs[0].global_setup_code == "shared = 2"
 
     def test_update_exercise_setup_code_marks_project_dirty_and_removes_blank_values(self) -> None:
         state = make_state()

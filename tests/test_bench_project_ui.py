@@ -132,6 +132,24 @@ async def test_settings_close_warns_before_discarding_unsaved_changes(user: User
 
 @pytest.mark.asyncio
 @pytest.mark.nicegui_main_file("notebook_ta/bench/app.py")
+async def test_settings_edits_global_setup_code(user: User) -> None:
+    """Settings persists shared Python setup code and marks the project dirty."""
+    state = BenchAppState(ProjectStore(None))
+
+    @ui.page("/")
+    def page() -> None:
+        """Render Settings under test."""
+        settings_tab.build(state)
+
+    await user.open("/")
+    user.find(ui.codemirror).type("shared_value = 2")
+
+    assert state.project.global_setup_code == "shared_value = 2"
+    assert state.dirty is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.nicegui_main_file("notebook_ta/bench/app.py")
 async def test_settings_exposes_editable_color_for_each_tag(user: User) -> None:
     """Settings shows colored tag names and hides raw hex values."""
     state = BenchAppState(ProjectStore(None))

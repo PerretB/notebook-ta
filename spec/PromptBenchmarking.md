@@ -74,6 +74,8 @@ It contains:
 - a confirmation before closing a project with unsaved changes.
 - an LLM model selection (dropdown list), called internal model, used for internal purpose like automatically generating fake user answers or evaluating tested LLM answers.
 - directories that should be added to the Python path for external code loading such as unit tests.
+- Python setup code shared by all Python exercises. It runs before each exercise's own setup code,
+  with both blocks using the same namespace.
 - an option to activate or deactivate auto-save.
 - an editable color for each tag, used consistently for tag badges throughout the application.
 
@@ -85,8 +87,9 @@ read if needed.
 
 For each exercise, the user can add one or several student answers. Each answer can be annotated
 with user-defined tags. The internal model can generate Python code or prose according to the
-exercise answer type. Python exercises expose setup and unit-test controls. Free-text exercises
-expose a prose editor and no execution or unit-test controls.
+exercise answer type. Python exercises expose per-exercise setup and unit-test controls. Their
+unit-test execution first runs the shared setup from Settings and then the exercise setup in the
+same namespace. Free-text exercises expose a prose editor and no execution or unit-test controls.
 
 
 7. Runner Tab
