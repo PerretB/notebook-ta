@@ -110,6 +110,7 @@ class InputSnapshot(BaseModel):
 
     exercise_statement: str
     additional_info: str | None = None
+    global_setup_code: str | None = None
     setup_code: str | None = None
     tests_serialized: str
     student_code: str
@@ -175,6 +176,7 @@ class BenchProject(BaseModel):
     draft_prompt_on_free_text: str = ""
     draft_selected_model_labels: list[str] = []
     draft_run_name: str = ""
+    global_setup_code: str = ""
     setup_code_by_exercise: dict[str, str] = Field(default_factory=dict)
     solutions: list[StudentSolution] = []
     prompt_versions: list[PromptVersion] = []

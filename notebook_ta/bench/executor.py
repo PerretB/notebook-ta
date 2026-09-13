@@ -53,6 +53,7 @@ class BenchJob:
     model: ModelUnderTest
     prompt_version: PromptVersion
     setup_code: str = ""
+    global_setup_code: str = ""
 
 
 # Called as on_progress(job, status, message, record). `record` is populated only
@@ -70,9 +71,14 @@ class _BenchmarkTestRunResult:
 
 def _execute_solution_tests(payload: bytes, result_queue: object) -> None:
     """Run solution/setup/test code in a worker process and return a serialized result."""
-    exercise_config, global_config, solution_code, setup_code, python_path_dirs = (
-        cloudpickle.loads(payload)
-    )
+    (
+        exercise_config,
+        global_config,
+        solution_code,
+        setup_code,
+        global_setup_code,
+        python_path_dirs,
+    ) = cloudpickle.loads(payload)
     exercise = Exercise(exercise_config, global_config)
     try:
         namespace: dict[str, object] = {}
@@ -80,7 +86,13 @@ def _execute_solution_tests(payload: bytes, result_queue: object) -> None:
             # The timeout-bounded worker is fault containment, not a security sandbox.
             exec(solution_code, namespace)  # noqa: S102
             test_names = [test_def.name for test_def in exercise.tests]
-            test_results = run_setup_code(setup_code, namespace, test_names)
+            test_results = run_setup_code(
+                global_setup_code, namespace, test_names, "Global setup code"
+            )
+            if test_results is None:
+                test_results = run_setup_code(
+                    setup_code, namespace, test_names, "Exercise setup code"
+                )
             if test_results is None:
                 test_results = TestRunner().run(
                     exercise,
@@ -127,6 +139,7 @@ def build_jobs(
     models: list[ModelUnderTest],
     prompt_version: PromptVersion,
     setup_code_by_exercise: dict[str, str] | None = None,
+    global_setup_code: str = "",
 ) -> list[BenchJob]:
     """Build the full model x exercise x solution job matrix for a benchmark run.
 
@@ -148,13 +161,17 @@ def build_jobs(
                         model,
                         prompt_version,
                         setup_code_by_exercise.get(exercise_config.id, ""),
+                        global_setup_code,
                     )
                 )
     return jobs
 
 
 def run_setup_code(
-    setup_code: str, namespace: dict[str, object], test_names: list[str]
+    setup_code: str,
+    namespace: dict[str, object],
+    test_names: list[str],
+    label: str = "Setup code",
 ) -> list[TestResult] | None:
     """Run benchmark setup code and return failed test results if setup fails."""
     if not setup_code:
@@ -169,7 +186,7 @@ def run_setup_code(
         if captured:
             message = f"{message}\nOutput: {captured}"
         return [
-            TestResult(name=name, passed=False, message=f"Setup code failed: {message}")
+            TestResult(name=name, passed=False, message=f"{label} failed: {message}")
             for name in test_names
         ]
     return None
@@ -181,11 +198,19 @@ def run_solution_tests_with_timeout(
     setup_code: str,
     python_path_dirs: list[str],
     timeout: float,
+    global_setup_code: str = "",
 ) -> _BenchmarkTestRunResult:
-    """Execute benchmark solution, setup, and tests in a child process with a timeout."""
+    """Execute a solution, global setup, exercise setup, and tests with a timeout."""
     try:
         payload = cloudpickle.dumps(
-            (exercise.config, exercise._global, solution_code, setup_code, python_path_dirs)
+            (
+                exercise.config,
+                exercise._global,
+                solution_code,
+                setup_code,
+                global_setup_code,
+                python_path_dirs,
+            )
         )
     except Exception as exc:
         return _BenchmarkTestRunResult(
@@ -310,7 +335,12 @@ class BenchExecutor:
     ) -> None:
         """Run unit tests + the LLM call for one job and report the resulting record."""
         on_progress(job, "generating", None, None)
-        snapshot = build_input_snapshot(job.exercise_config, job.solution, job.setup_code)
+        snapshot = build_input_snapshot(
+            job.exercise_config,
+            job.solution,
+            job.setup_code,
+            job.global_setup_code,
+        )
         global_config = _build_global_config(job.prompt_version, job.model)
         global_config.unit_test_timeout = self._get_unit_test_timeout()
         try:
@@ -328,6 +358,7 @@ class BenchExecutor:
                     setup_code=job.setup_code,
                     python_path_dirs=self._get_python_path_dirs(),
                     timeout=exercise.unit_test_timeout,
+                    global_setup_code=job.global_setup_code,
                 )
                 if worker_result.error is not None:
                     raise RuntimeError(worker_result.error)

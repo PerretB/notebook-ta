@@ -180,6 +180,8 @@ inputs, and so the drift hash can be recomputed if the hashing algorithm ever ch
 | `exercise_statement` | `str` |
 | `expected_output` | `str \| None` |
 | `additional_info` | `str \| None` |
+| `global_setup_code` | `str \| None` |
+| `setup_code` | `str \| None` (per-exercise) |
 | `tests_serialized` | `str` (canonical JSON dump of `list[TestDefinition]`) |
 | `student_code` | `str` |
 | `exercise_hash` | `str` (sha256) |
@@ -239,6 +241,8 @@ class BenchProject(BaseModel):
     draft_prompt_on_free_text: str = ""
     draft_selected_model_labels: list[str] = []
     draft_run_name: str = ""
+    global_setup_code: str = ""
+    setup_code_by_exercise: dict[str, str] = {}
     solutions: list[StudentSolution] = []
     prompt_versions: list[PromptVersion] = []
     models_under_test: list[ModelUnderTest] = []
@@ -247,7 +251,8 @@ class BenchProject(BaseModel):
 ```
 
 `draft_*` fields persist the instructor's in-progress Runner tab state (spec §4.A "Active
-Workspace") so it survives save/reload, distinct from frozen `PromptVersion` snapshots.
+Workspace") so it survives save/reload, distinct from frozen `PromptVersion` snapshots. The global
+setup field has an empty default, keeping older schema-v2 files loadable without migration.
 
 Lookup helpers (implemented as plain methods on `BenchProject`, not stored):
 
@@ -384,15 +389,24 @@ count cover both thinking and answer output.
 ## 8. Stale / Drift Detection (`bench/hashing.py`)
 
 ```python
-def compute_exercise_hash(config: ExerciseConfig) -> str: ...
+def compute_exercise_hash(
+    config: ExerciseConfig,
+    setup_code: str | None = None,
+    global_setup_code: str | None = None,
+) -> str: ...
 def compute_student_hash(code: str) -> str: ...
-def build_input_snapshot(config: ExerciseConfig, solution: StudentSolution) -> InputSnapshot: ...
-def is_stale(record: ExecutionRecord, live_config: ExerciseConfig, live_solution: StudentSolution) -> bool: ...
+def build_input_snapshot(
+    config: ExerciseConfig,
+    solution: StudentSolution,
+    setup_code: str | None = None,
+    global_setup_code: str | None = None,
+) -> InputSnapshot: ...
 ```
 
 - `compute_exercise_hash()` hashes a canonical JSON encoding of
-  `{statement, expected_output, additional_info, tests_serialized}` (per decision #5 — broad scope,
-  including unit test definitions).
+  the exercise fields, configured limits, serialized tests, and both setup blocks (per decision #5
+  — broad scope). The global-setup key is omitted when it is empty so hashes in older schema-v2
+  records remain stable.
 - `compute_student_hash()` hashes the raw solution code.
 - `is_stale()` recomputes both hashes against the **live** `ExerciseConfig` (reloaded from the TOML
   catalog) and the **live** `StudentSolution` from the project, and compares them against
@@ -415,6 +429,8 @@ class BenchJob:
     solution: StudentSolution
     model: ModelUnderTest
     prompt_version: PromptVersion
+    setup_code: str
+    global_setup_code: str
 ```
 
 Clicking **"Run Benchmark"**:
@@ -476,9 +492,16 @@ Reuses `testing.runner.TestRunner` and `exercise.definition.Exercise` unchanged:
 ```python
 namespace: dict = {}
 exec(solution.code, namespace)          # isolated namespace, mirrors student cell execution
+exec(job.global_setup_code, namespace)  # shared project setup
+exec(job.setup_code, namespace)         # exercise setup; can use global definitions
 test_results = TestRunner().run(job.exercise, namespace)
 prompt = job.exercise.build_prompt(solution.code, test_results, hint_history=None)
 ```
+
+The global setup block is executed before the per-exercise block for every Python solution. A
+failure in either block becomes a failed result for every test in that exercise; if global setup
+fails, per-exercise setup is skipped. Both blocks are included independently in input snapshots and
+drift hashes, so changing either marks earlier results stale.
 
 `sys.path` is temporarily extended with `settings.python_path_dirs` before `importlib.import_module()`
 calls for external test modules (`module`/`function` style `TestDefinition`s), then restored — same
@@ -659,7 +682,7 @@ truth.
 
 | Tab | Module | Key elements (spec ref) |
 |-----|--------|--------------------------|
-| Settings | `settings_tab.py` | Save-As and Close-project actions; internal model `LLMConfig` form; `python_path_dirs` editable list (with a directory picker); a global editable **Tags** list with per-tag color pickers; autosave toggle + interval (§5). Exercise catalog import belongs exclusively to the welcome/new-project flow. |
+| Settings | `settings_tab.py` | Save-As and Close-project actions; global setup-code editor; internal model `LLMConfig` form; `python_path_dirs` editable list (with a directory picker); a global editable **Tags** list with per-tag color pickers; autosave toggle + interval (§5). Exercise catalog import belongs exclusively to the welcome/new-project flow. |
 | Exercises | `exercises_tab.py` | Expanded-by-default exercise groups with editable display names; an **Add exercise** dialog which appends to a local TOML catalog through `catalog.py` (remote catalogs remain read-only); horizontally scrollable, side-by-side solution cards with editable names, `ui.codemirror`, tags, generation, removal, and inline unit test results. Catalog edits use `tomlkit` so existing comments and formatting survive (§6). |
 | Runner | `runner_tab.py` | `on_success`/`on_failure` textareas bound to `project.draft_prompt_*`; prompt version history dropdown ("Prompt Recall" — loads a past `PromptVersion` into the drafts without mutating history, §4.A); model multi-select built from `models_under_test`; an optional **run name** field (`project.draft_run_name`, defaults to `"Run N"` if left blank); **Run Benchmark** button; live progress table (`ui.table` bound to job statuses) + global `ui.linear_progress`; a **Run History** list showing past runs' name/status/models (§7). |
 | Compare | `compare_tab.py` | Shared historical `[model, prompt_version]` multi-select with latest-run defaults; tag filter; expanded, collapsible exercise groups; aligned solution rows and result columns; latency/throughput badges and Markdown output; stale cells with Re-run; click-through prompt / tests / metrics / errors dialog (§8). |

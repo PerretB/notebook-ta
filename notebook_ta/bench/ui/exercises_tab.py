@@ -373,6 +373,7 @@ async def _run_solution_tests(
             setup_code=state.project.setup_code_for(exercise_config.id),
             python_path_dirs=list(state.project.settings.python_path_dirs),
             timeout=state.project.settings.unit_test_timeout,
+            global_setup_code=state.project.global_setup_code,
         )
         error = worker_result.error
         test_results = TestRunner.truncate_output(

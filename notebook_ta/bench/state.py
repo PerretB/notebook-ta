@@ -281,7 +281,8 @@ class BenchAppState:
             solutions_by_exercise,
             selected,
             prompt_version,
-            self.project.setup_code_by_exercise,
+            setup_code_by_exercise=self.project.setup_code_by_exercise,
+            global_setup_code=self.project.global_setup_code,
         )
 
         run = BenchmarkRun(
@@ -345,7 +346,8 @@ class BenchAppState:
             solution,
             model,
             prompt_version,
-            self.project.setup_code_for(config.id),
+            setup_code=self.project.setup_code_for(config.id),
+            global_setup_code=self.project.global_setup_code,
         )
 
         async def _do_rerun() -> ExecutionRecord:

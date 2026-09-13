@@ -69,6 +69,13 @@ class TestHashStability:
         changed = compute_exercise_hash(make_exercise(), setup_code="expected = 5")
         assert original != changed
 
+    def test_global_setup_code_change_changes_hash(self) -> None:
+        original = compute_exercise_hash(make_exercise())
+        changed = compute_exercise_hash(
+            make_exercise(), global_setup_code="shared_value = 2"
+        )
+        assert original != changed
+
     def test_unit_test_timeout_change_changes_hash(self) -> None:
         original = compute_exercise_hash(make_exercise())
         changed = compute_exercise_hash(make_exercise(unit_test_timeout=10.0))
@@ -102,9 +109,15 @@ class TestInputSnapshot:
     def test_snapshot_captures_verbatim_fields(self) -> None:
         config = make_exercise(additional_info="info")
         solution = make_solution()
-        snapshot = build_input_snapshot(config, solution, setup_code="expected = 5")
+        snapshot = build_input_snapshot(
+            config,
+            solution,
+            setup_code="expected = 5",
+            global_setup_code="shared_value = 2",
+        )
         assert snapshot.exercise_statement == config.statement
         assert snapshot.additional_info == "info"
+        assert snapshot.global_setup_code == "shared_value = 2"
         assert snapshot.setup_code == "expected = 5"
         assert snapshot.student_code == solution.code
         assert snapshot.combined_hash
@@ -122,6 +135,7 @@ class TestInputSnapshot:
 
         assert snapshot.answer_type == "free_text"
         assert snapshot.evaluation_criteria == "Mention a base case."
+        assert snapshot.global_setup_code is None
         assert snapshot.setup_code is None
 
 
@@ -155,6 +169,21 @@ class TestIsStale:
         snapshot = build_input_snapshot(config, solution, setup_code="expected = 5")
         record = ExecutionRecordStub(snapshot)
         assert is_stale(record, config, solution, live_setup_code="expected = 6") is True
+
+    def test_stale_when_global_setup_code_changes(self) -> None:
+        config = make_exercise()
+        solution = make_solution()
+        snapshot = build_input_snapshot(
+            config, solution, global_setup_code="shared_value = 2"
+        )
+        record = ExecutionRecordStub(snapshot)
+
+        assert is_stale(
+            record,
+            config,
+            solution,
+            live_global_setup_code="shared_value = 3",
+        ) is True
 
 
 class ExecutionRecordStub:
