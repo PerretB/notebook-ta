@@ -557,6 +557,13 @@ kernel session. Restarting the kernel clears all history.
 
 All display functions use `IPython.display` and `ipywidgets`.
 
+The hint controls are displayed together with a dedicated `ipywidgets.Output` beneath them.
+The synchronous click callback runs inside that output's capture context, routing new answer
+panels, debug prompts, and unavailable-provider messages back to the originating cell in
+JupyterLab as well as VS Code. Capture ends before awaiting queued work; subsequent streaming
+updates use the response widget's state, so unrelated cell output is not captured while a hint
+is pending. Repeated clicks append responses to the same output area.
+
 | Function                              | Output                                                                   |
 |---------------------------------------|--------------------------------------------------------------------------|
 | `display_success()`                   | "✅ Tests passed" indicator before streaming begins                      |
