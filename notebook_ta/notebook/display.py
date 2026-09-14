@@ -586,6 +586,7 @@ def display_hints_button(
     button.style.text_color = "var(--jp-ui-inverse-font-color1, #ffffff)"
     button.add_class("notebook-ta-hint-button")
     status = widgets.HTML(value="", layout=widgets.Layout(margin="0 0 0 0.5em"))
+    output = widgets.Output(layout=widgets.Layout(width="100%", overflow="visible"))
     _HINT_BUTTONS.append(weakref.ref(button))
     _apply_hint_button_state(button)
 
@@ -613,7 +614,11 @@ def display_hints_button(
         button.description = translate("display_hints_fetching")
         accepted: Awaitable[bool | None] | bool | None = None
         try:
-            accepted = callback(exercise_id)
+            # JupyterLab needs an explicit destination for displays from comm callbacks.
+            # Capture panel creation and fallback/debug messages, then release capture
+            # before awaiting the request so later cells keep their own output.
+            with output:
+                accepted = callback(exercise_id)
             if inspect.isawaitable(accepted):
                 async def _finish_async_request() -> None:
                     try:
@@ -638,8 +643,10 @@ def display_hints_button(
         ),
     )
     container.add_class("notebook-ta-hints")
+    panel = widgets.VBox([container, output], layout=widgets.Layout(width="100%"))
+    panel.add_class("notebook-ta-hints")
     cast(Any, ipydisplay.display)(cast(Any, ipydisplay.HTML)(_HINT_BUTTON_STYLE))
-    cast(Any, ipydisplay.display)(container)
+    cast(Any, ipydisplay.display)(panel)
 
 
 def display_no_llm_message(message: str) -> None:

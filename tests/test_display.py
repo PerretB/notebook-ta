@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -14,8 +15,10 @@ from notebook_ta.notebook.display import (
     LLMOutput,
     clear_cell_output,
     display_busy_message,
+    display_debug_prompt,
     display_hints_button,
     display_initialization,
+    display_no_llm_message,
     display_ollama_setup,
     display_test_results,
     format_llm_answer_markdown,
@@ -219,7 +222,7 @@ def test_display_hints_button_uses_theme_aware_transparent_container() -> None:
     assert "--jp-brand-color1" in style_output.data
 
     assert "notebook-ta-hints" in button_output._dom_classes
-    button = button_output.children[0]
+    button = button_output.children[0].children[0]
     assert button.style.button_color == "var(--jp-brand-color1, #0f766e)"
     assert button.style.text_color == "var(--jp-ui-inverse-font-color1, #ffffff)"
 
@@ -231,7 +234,7 @@ def test_display_hints_button_shows_busy_status_locally() -> None:
         display_hints_button("exercise-id", callback=lambda _exercise_id: False)
 
     button_output = display_mock.call_args_list[1].args[0]
-    button, status = button_output.children
+    button, status = button_output.children[0].children
 
     button.click()
 
@@ -253,7 +256,7 @@ async def test_display_hints_button_retains_async_callback_until_completion() ->
     with patch("notebook_ta.notebook.display.ipydisplay.display") as display_mock:
         display_hints_button("exercise-id", callback=_callback)
 
-    button, status = display_mock.call_args_list[1].args[0].children
+    button, status = display_mock.call_args_list[1].args[0].children[0].children
     button.click()
 
     await callback_started.wait()
@@ -270,6 +273,91 @@ async def test_display_hints_button_retains_async_callback_until_completion() ->
     assert status.value == ""
 
 
+@pytest.mark.parametrize("message_type", ["answer", "debug", "unavailable"])
+def test_hint_callback_displays_have_a_comm_output_destination(message_type: str) -> None:
+    """JupyterLab must be able to route callback displays to the hint's Output widget."""
+    parent = {"header": {"msg_id": "hint-click-comm"}}
+    shell = SimpleNamespace(kernel=SimpleNamespace(get_parent=lambda: parent))
+    rendered = []
+    answers = []
+
+    def callback(_exercise_id: str) -> None:
+        """Emit the same kinds of displays as the magic's hint callback."""
+        if message_type == "answer":
+            answers.append(LLMOutput())
+        elif message_type == "debug":
+            display_debug_prompt("Hint prompt", call_type="hint")
+        else:
+            display_no_llm_message("No provider available")
+
+    set_hint_buttons_busy(False)
+    with patch("notebook_ta.notebook.display.ipydisplay.display") as display_mock:
+        display_hints_button("exercise-id", callback)
+    controls, destination = display_mock.call_args_list[1].args[0].children
+    button = controls.children[0]
+
+    def route_display(value: object) -> None:
+        """Model JupyterLab routing only displays with an active capture target."""
+        assert destination.msg_id == parent["header"]["msg_id"]
+        rendered.append(value)
+
+    with (
+        patch("ipywidgets.widgets.widget_output.get_ipython", return_value=shell),
+        patch("notebook_ta.notebook.display.ipydisplay.display", side_effect=route_display),
+    ):
+        button.click()
+        button.click()
+
+    assert destination.msg_id == ""
+    assert button.disabled is False
+    assert len(rendered) == (4 if message_type == "answer" else 2)
+    if message_type == "answer":
+        answers[0].show_answer("First hint")
+        answers[1].show_answer("Second hint")
+        assert "First hint" in rendered[1].children[0].outputs[0]["data"]["text/markdown"]
+        assert "Second hint" in rendered[3].children[0].outputs[0]["data"]["text/markdown"]
+    elif message_type == "debug":
+        assert rendered[0].children[0].value == "Hint prompt"
+    else:
+        assert "No provider available" in rendered[0].data
+
+
+async def test_hint_output_capture_ends_before_queued_request_completes() -> None:
+    """Pending hints must update their panel without capturing later cell output."""
+    parent = {"header": {"msg_id": "hint-click-comm"}}
+    shell = SimpleNamespace(kernel=SimpleNamespace(get_parent=lambda: parent))
+    completion = asyncio.get_running_loop().create_future()
+    answers = []
+
+    def callback(_exercise_id: str) -> asyncio.Future[bool]:
+        """Reserve the answer synchronously, as the magic does before queueing."""
+        assert destination.msg_id == "hint-click-comm"
+        answers.append(LLMOutput())
+        return completion
+
+    set_hint_buttons_busy(False)
+    with patch("notebook_ta.notebook.display.ipydisplay.display") as display_mock:
+        display_hints_button("exercise-id", callback)
+        controls, destination = display_mock.call_args_list[1].args[0].children
+        button = controls.children[0]
+        with patch("ipywidgets.widgets.widget_output.get_ipython", return_value=shell):
+            button.click()
+
+        assert destination.msg_id == ""
+        assert button.disabled is True
+        answer_panel = display_mock.call_args.args[0]
+        try:
+            answers[0].show_waiting()
+            answers[0].show_answer("Streamed hint")
+            assert "Streamed hint" in answer_panel.children[0].outputs[0]["data"]["text/markdown"]
+            assert destination.msg_id == ""
+        finally:
+            completion.set_result(True)
+            await asyncio.gather(*list(_BACKGROUND_TASKS))
+
+    assert button.disabled is False
+
+
 def test_hint_buttons_can_be_disabled_and_restored_globally() -> None:
     """All registered hint buttons should reflect the notebook-ta busy state."""
     set_hint_buttons_busy(False)
@@ -277,8 +365,8 @@ def test_hint_buttons_can_be_disabled_and_restored_globally() -> None:
         display_hints_button("ex1", callback=lambda _exercise_id: None)
         display_hints_button("ex2", callback=lambda _exercise_id: None)
 
-    first_button = display_mock.call_args_list[1].args[0].children[0]
-    second_button = display_mock.call_args_list[3].args[0].children[0]
+    first_button = display_mock.call_args_list[1].args[0].children[0].children[0]
+    second_button = display_mock.call_args_list[3].args[0].children[0].children[0]
 
     set_hint_buttons_busy(True)
 
@@ -307,7 +395,7 @@ def test_busy_hint_button_click_does_not_call_callback() -> None:
     with patch("notebook_ta.notebook.display.ipydisplay.display") as display_mock:
         display_hints_button("exercise-id", callback=_callback)
 
-    button = display_mock.call_args_list[1].args[0].children[0]
+    button = display_mock.call_args_list[1].args[0].children[0].children[0]
     set_hint_buttons_busy(True)
 
     button.click()
